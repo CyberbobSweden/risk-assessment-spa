@@ -1001,7 +1001,7 @@ function initReports(){
 
 function reportMeta(){
   const s = settings;
-  return `${esc(s.customer || 'Ej angiven kund')} · ${esc(s.project || 'Cyber Asset Inventory & Risk Assessment')} · Genererad ${new Date().toLocaleDateString('sv-SE')} av ${esc(s.consultancy || 'Combitech')}`;
+  return `${esc(s.customer || 'Ej angiven kund')} · ${esc(s.project || 'Cyber Asset Inventory & Risk Assessment')} · Genererad ${new Date().toLocaleDateString('sv-SE')} av ${esc(s.consultancy || 'Konsult ej angiven')}`;
 }
 
 function generateReport(type){
@@ -1136,7 +1136,7 @@ function downloadBlob(blob, filename){
    ============================================================ */
 
 function initSettings(){
-  document.getElementById('settingsConsultancy').value = settings.consultancy || 'Combitech';
+  document.getElementById('settingsConsultancy').value = settings.consultancy || '';
   document.getElementById('settingsCustomer').value = settings.customer || '';
   document.getElementById('settingsProject').value = settings.project || '';
   document.getElementById('settingsConsultant').value = settings.consultant || '';
@@ -1336,9 +1336,15 @@ async function createWorkspaceAndOpen(name, customer, consultant){
 }
 
 function showWelcomeScreen(){
+  document.getElementById('welcomeStepHero').style.display = 'block';
+  document.getElementById('welcomeStepWorkspace').style.display = 'none';
+  document.getElementById('welcomeScreen').classList.add('active');
+}
+function showWelcomeWorkspaceStep(){
   document.getElementById('welcomeWorkspaceListWrap').style.display = workspaces.length ? 'block' : 'none';
   renderWorkspaceListInto('welcomeWorkspaceList');
-  document.getElementById('welcomeScreen').classList.add('active');
+  document.getElementById('welcomeStepHero').style.display = 'none';
+  document.getElementById('welcomeStepWorkspace').style.display = 'block';
 }
 function hideWelcomeScreen(){
   document.getElementById('welcomeScreen').classList.remove('active');
@@ -1379,6 +1385,11 @@ function initWorkspaceSwitcher(){
     });
   });
 
+  document.getElementById('welcomeGetStartedBtn').addEventListener('click', showWelcomeWorkspaceStep);
+  document.getElementById('welcomeBackBtn').addEventListener('click', () => {
+    document.getElementById('welcomeStepWorkspace').style.display = 'none';
+    document.getElementById('welcomeStepHero').style.display = 'block';
+  });
   document.getElementById('welcomeCreateWorkspaceBtn').addEventListener('click', () => {
     const name = document.getElementById('welcome_ws_name').value;
     const customer = document.getElementById('welcome_ws_customer').value;

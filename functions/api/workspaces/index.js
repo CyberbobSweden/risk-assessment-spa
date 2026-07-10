@@ -26,12 +26,12 @@ export async function onRequestPost({ env, request }) {
      VALUES (?,?,?,?,?,?,?,?,?)`
   ).bind(
     id, body.name.trim(), body.customer || '', body.project || '',
-    body.consultancy || 'Combitech', body.consultant || '', email, now, now
+    body.consultancy || '', body.consultant || '', email, now, now
   ).run();
 
   return json({
     id, name: body.name.trim(), customer: body.customer || '', project: body.project || '',
-    consultancy: body.consultancy || 'Combitech', consultant: body.consultant || '',
+    consultancy: body.consultancy || '', consultant: body.consultant || '',
     created_at: now, updated_at: now,
   }, 201);
 }

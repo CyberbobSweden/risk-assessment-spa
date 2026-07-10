@@ -17,7 +17,7 @@ export async function onRequestPut({ env, params, request }) {
     `UPDATE workspaces SET name=?, customer=?, project=?, consultancy=?, consultant=?, updated_at=? WHERE id=?`
   ).bind(
     body.name || 'Namnlöst arbetsrum', body.customer || '', body.project || '',
-    body.consultancy || 'Combitech', body.consultant || '', now, params.id
+    body.consultancy || '', body.consultant || '', now, params.id
   ).run();
 
   const ws = await env.DB.prepare(`SELECT * FROM workspaces WHERE id = ?`).bind(params.id).first();

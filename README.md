@@ -62,12 +62,12 @@ wrangler pages deploy . --project-name=risk-assessment-spa
 
 ### 4. Sätt upp Cloudflare Access (inloggning/delning)
 
-För att bara Combitech-konsulter och rätt kunder ska kunna nå appen:
+För att bara rätt konsulter och kunder ska kunna nå appen:
 
 1. **Zero Trust-dashboarden → Access → Applications → Add an application → Self-hosted**
 2. Domän: din Pages-URL (t.ex. `risk-assessment-spa.pages.dev` eller egen domän)
 3. Policy: lägg till regler, t.ex.
-   - **Allow**: e-postdomän `@combitech.com`
+   - **Allow**: er egen e-postdomän (t.ex. `@dittbolag.se`)
    - **Allow**: specifika kund-e-postadresser (en policy per kundengagemang, eller en gemensam lista)
 4. Spara — nu krävs inloggning (Google/Microsoft/e-post-OTP m.m., valfritt i Access-policyn) för att nå appen överhuvudtaget
 

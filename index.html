@@ -14,15 +14,28 @@
 <!-- ===================== HEADER ===================== -->
 <!-- ===================== WELCOME SCREEN (first-load gate) ===================== -->
 <div class="welcome-screen" id="welcomeScreen">
-  <div class="welcome-card">
+
+  <!-- STEP 1: Hero / landing -->
+  <div class="welcome-card welcome-step" id="welcomeStepHero">
     <div class="welcome-brand">
       <div class="brand-mark large"><i class="fa-solid fa-shield-halved"></i></div>
+      <span class="welcome-eyebrow">Ett projekt av Cyberbob</span>
       <h1>Cyber Asset Inventory<span>&amp; Risk Assessment</span></h1>
-      <p>Ett delat verktyg för Combitechs konsulter och kunder att inventera IT-miljöer, identifiera risker och prioritera åtgärder tillsammans.</p>
+      <p>Ett verktyg för att snabbt kartlägga en organisations IT-miljö, upptäcka risker automatiskt och prioritera rätt åtgärder — byggt för att konsulter och kunder ska kunna se samma riskbild, i realtid, på samma plats.</p>
     </div>
+    <button class="btn btn-primary" id="welcomeGetStartedBtn" style="width:100%;justify-content:center;">
+      Kom igång <i class="fa-solid fa-arrow-right"></i>
+    </button>
+    <p class="welcome-footnote">🛡️ Byggt med Cloudflare Pages, D1 &amp; en nypa säkerhetsnörderi.</p>
+  </div>
+
+  <!-- STEP 2: Workspace picker / create -->
+  <div class="welcome-card welcome-step" id="welcomeStepWorkspace" style="display:none;">
+    <button class="welcome-back" id="welcomeBackBtn"><i class="fa-solid fa-arrow-left"></i> Tillbaka</button>
+    <h4 class="section-subtitle" style="margin-top:6px;">Arbetsrum</h4>
 
     <div id="welcomeWorkspaceListWrap" style="display:none;">
-      <h4 class="section-subtitle">Öppna ett arbetsrum</h4>
+      <p class="muted" style="margin-bottom:10px;">Öppna ett befintligt arbetsrum:</p>
       <div class="list-body" id="welcomeWorkspaceList" style="margin-bottom:22px;"></div>
     </div>
 
@@ -37,6 +50,7 @@
       <i class="fa-solid fa-plus"></i> Skapa arbetsrum &amp; kom igång
     </button>
   </div>
+
 </div>
 
 <header class="topbar">
@@ -336,7 +350,7 @@
         <div class="form-grid">
           <div class="form-field">
             <label>Konsultbolag</label>
-            <input type="text" id="settingsConsultancy" value="Combitech">
+            <input type="text" id="settingsConsultancy" placeholder="T.ex. ditt konsultbolag">
           </div>
           <div class="form-field">
             <label>Kundnamn</label>

@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS workspaces (
   name         TEXT NOT NULL,
   customer     TEXT DEFAULT '',
   project      TEXT DEFAULT '',
-  consultancy  TEXT DEFAULT 'Combitech',
+  consultancy  TEXT DEFAULT '',
   consultant   TEXT DEFAULT '',
   created_by   TEXT DEFAULT '',
   created_at   TEXT NOT NULL,
