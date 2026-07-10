@@ -11,9 +11,8 @@
    1. CONFIG / TAXONOMIES
    ============================================================ */
 
-const STORAGE_KEY = 'caira_systems_v1';
-const SETTINGS_KEY = 'caira_settings_v1';
-const ACTIONS_KEY = 'caira_action_status_v1'; // completed recommendation ids
+const API_BASE = '/api';
+const LAST_WORKSPACE_KEY = 'caira_last_workspace_id'; // only remembers which workspace to open, not the data itself
 
 const SYSTEM_TYPES = ['Affärssystem','OT','ICS','SCADA','Server','Databas','Webbapplikation','Mobilapp','SaaS','Azure','AWS','Google Cloud','Microsoft 365','Nätverksutrustning','Brandvägg','Annat'];
 const CLOUD_TYPES = ['SaaS','Azure','AWS','Google Cloud','Microsoft 365'];
@@ -76,29 +75,62 @@ const RISK_BADGE_CLASS = { 'Låg':'badge-low', 'Medel':'badge-medium', 'Hög':'b
    2. STATE
    ============================================================ */
 
-let systems = [];          // array of system objects
-let settings = {};         // project/customer settings
+let systems = [];          // array of system objects (cache of the current workspace's data)
+let settings = {};         // project/customer settings (mirrors the current workspace row)
 let completedActions = {}; // { actionId: true }
 let charts = {};           // Chart.js instances keyed by canvas id
 let currentWizardStep = 1;
 let editingSystemId = null;
+let workspaces = [];        // all workspaces the caller can see
+let currentWorkspaceId = null;
 let currentFilters = { risk:'', vendor:'', regulation:'', owner:'', cloud:'', criticality:'' };
 let currentSort = { key:'riskScore', dir:'desc' };
 let searchTerm = '';
 let currentReport = null;
 
 /* ============================================================
-   3. PERSISTENCE
+   3. PERSISTENCE — Cloudflare Pages Functions + D1 backend
+   All systems/settings/actions live server-side, scoped to a workspace
+   (= one customer engagement) so consultants and customers see shared data.
    ============================================================ */
 
-function loadState(){
-  try{ systems = JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; } catch(e){ systems = []; }
-  try{ settings = JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; } catch(e){ settings = {}; }
-  try{ completedActions = JSON.parse(localStorage.getItem(ACTIONS_KEY)) || {}; } catch(e){ completedActions = {}; }
+async function apiRequest(path, options){
+  const res = await fetch(API_BASE + path, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options,
+  });
+  if (!res.ok){
+    let msg = `Fel (${res.status})`;
+    try{ const body = await res.json(); if (body.error) msg = body.error; } catch(e){}
+    throw new Error(msg);
+  }
+  if (res.status === 204) return null;
+  return res.json();
 }
-function saveSystems(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(systems)); }
-function saveSettings(){ localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }
-function saveActions(){ localStorage.setItem(ACTIONS_KEY, JSON.stringify(completedActions)); }
+const apiGet = path => apiRequest(path);
+const apiPost = (path, body) => apiRequest(path, { method:'POST', body: JSON.stringify(body) });
+const apiPut = (path, body) => apiRequest(path, { method:'PUT', body: JSON.stringify(body) });
+const apiDelete = path => apiRequest(path, { method:'DELETE' });
+
+/** Loads the workspace list. Called on startup and whenever the switcher opens. */
+async function loadWorkspaces(){
+  workspaces = await apiGet('/workspaces');
+  return workspaces;
+}
+
+/** Loads everything for one workspace: metadata (-> settings), systems, action status. */
+async function loadWorkspaceData(workspaceId){
+  const [ws, sysList, actions] = await Promise.all([
+    apiGet(`/workspaces/${workspaceId}`),
+    apiGet(`/workspaces/${workspaceId}/systems`),
+    apiGet(`/workspaces/${workspaceId}/actions`),
+  ]);
+  currentWorkspaceId = workspaceId;
+  settings = { customer: ws.customer, project: ws.project, consultancy: ws.consultancy, consultant: ws.consultant, name: ws.name };
+  systems = sysList;
+  completedActions = actions;
+  localStorage.setItem(LAST_WORKSPACE_KEY, workspaceId);
+}
 
 /* ============================================================
    4. RISK ENGINE
@@ -733,7 +765,7 @@ function closeSystemModal(){
   editingSystemId = null;
 }
 
-function saveSystemFromForm(){
+async function saveSystemFromForm(){
   const name = document.getElementById('f_name').value.trim();
   const type = document.getElementById('f_type').value;
   if (!name || !type){
@@ -744,12 +776,12 @@ function saveSystemFromForm(){
   const depSel = document.getElementById('f_dependencies');
   const dependencies = Array.from(depSel.selectedOptions).map(o => o.value);
 
-  const id = document.getElementById('systemId').value || ('sys_' + Date.now() + '_' + Math.random().toString(36).slice(2,7));
+  const id = document.getElementById('systemId').value || null;
   const now = new Date().toISOString();
-  const existing = systems.find(s => s.id === id);
+  const existing = id ? systems.find(s => s.id === id) : null;
 
   const sys = {
-    id,
+    id: id || undefined,
     name,
     description: document.getElementById('f_description').value.trim(),
     systemOwner: document.getElementById('f_systemOwner').value.trim(),
@@ -775,26 +807,39 @@ function saveSystemFromForm(){
   const risk = computeRisk(sys);
   sys.riskScore = risk.score; sys.riskLevel = risk.level; sys.findings = risk.findings;
 
-  if (existing){
-    systems = systems.map(s => s.id === id ? sys : s);
-  } else {
-    systems.push(sys);
+  const saveBtn = document.getElementById('saveSystemBtn');
+  saveBtn.disabled = true;
+  try{
+    const saved = existing
+      ? await apiPut(`/workspaces/${currentWorkspaceId}/systems/${id}`, sys)
+      : await apiPost(`/workspaces/${currentWorkspaceId}/systems`, sys);
+
+    if (existing) systems = systems.map(s => s.id === id ? saved : s);
+    else systems.push(saved);
+
+    closeSystemModal();
+    showToast(existing ? 'System uppdaterat och analyserat.' : 'System tillagt och analyserat.', 'success');
+    renderAll();
+  } catch(err){
+    showToast('Kunde inte spara: ' + err.message, 'error');
+  } finally {
+    saveBtn.disabled = false;
   }
-  saveSystems();
-  closeSystemModal();
-  showToast(existing ? 'System uppdaterat och analyserat.' : 'System tillagt och analyserat.', 'success');
-  renderAll();
 }
 
-function deleteSystem(id){
+async function deleteSystem(id){
   const sys = systems.find(s => s.id === id);
   if (!sys) return;
   if (!confirm(`Ta bort "${sys.name}"? Detta kan inte ångras.`)) return;
-  systems = systems.filter(s => s.id !== id);
-  systems.forEach(s => { s.dependencies = (s.dependencies||[]).filter(d => d !== id); });
-  saveSystems();
-  showToast('System borttaget.', 'success');
-  renderAll();
+  try{
+    await apiDelete(`/workspaces/${currentWorkspaceId}/systems/${id}`);
+    systems = systems.filter(s => s.id !== id);
+    systems.forEach(s => { s.dependencies = (s.dependencies||[]).filter(d => d !== id); });
+    showToast('System borttaget.', 'success');
+    renderAll();
+  } catch(err){
+    showToast('Kunde inte ta bort: ' + err.message, 'error');
+  }
 }
 
 /* ============================================================
@@ -1096,14 +1141,22 @@ function initSettings(){
   document.getElementById('settingsProject').value = settings.project || '';
   document.getElementById('settingsConsultant').value = settings.consultant || '';
 
-  document.getElementById('saveSettingsBtn').addEventListener('click', () => {
-    settings.consultancy = document.getElementById('settingsConsultancy').value.trim();
-    settings.customer = document.getElementById('settingsCustomer').value.trim();
-    settings.project = document.getElementById('settingsProject').value.trim();
-    settings.consultant = document.getElementById('settingsConsultant').value.trim();
-    saveSettings();
-    updateCustomerChip();
-    showToast('Inställningar sparade.', 'success');
+  document.getElementById('saveSettingsBtn').addEventListener('click', async () => {
+    const body = {
+      name: settings.name || document.getElementById('settingsCustomer').value.trim() || 'Namnlöst arbetsrum',
+      consultancy: document.getElementById('settingsConsultancy').value.trim(),
+      customer: document.getElementById('settingsCustomer').value.trim(),
+      project: document.getElementById('settingsProject').value.trim(),
+      consultant: document.getElementById('settingsConsultant').value.trim(),
+    };
+    try{
+      const ws = await apiPut(`/workspaces/${currentWorkspaceId}`, body);
+      settings = { customer: ws.customer, project: ws.project, consultancy: ws.consultancy, consultant: ws.consultant, name: ws.name };
+      updateCustomerChip();
+      showToast('Inställningar sparade.', 'success');
+    } catch(err){
+      showToast('Kunde inte spara: ' + err.message, 'error');
+    }
   });
 
   document.getElementById('exportAllJsonBtn').addEventListener('click', () => exportJSON('CAIRA_full_export'));
@@ -1113,18 +1166,23 @@ function initSettings(){
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = ev => {
+    reader.onload = async ev => {
       try{
         const parsed = JSON.parse(ev.target.result);
         const imported = Array.isArray(parsed) ? parsed : parsed.systems;
         if (!Array.isArray(imported)) throw new Error('Ogiltigt format');
-        systems = imported;
-        recalcAll();
-        saveSystems();
+        showToast(`Importerar ${imported.length} system …`);
+        for (const s of imported){
+          const { id, ...rest } = s; // let the API assign fresh ids
+          const risk = computeRisk(rest);
+          rest.riskScore = risk.score; rest.riskLevel = risk.level; rest.findings = risk.findings;
+          const saved = await apiPost(`/workspaces/${currentWorkspaceId}/systems`, rest);
+          systems.push(saved);
+        }
         renderAll();
         showToast(`${imported.length} system importerade.`, 'success');
       } catch(err){
-        showToast('Kunde inte tolka JSON-filen.', 'error');
+        showToast('Kunde inte importera: ' + err.message, 'error');
       }
     };
     reader.readAsText(file);
@@ -1132,12 +1190,16 @@ function initSettings(){
   });
 
   document.getElementById('loadDemoBtn').addEventListener('click', loadDemoData);
-  document.getElementById('clearAllDataBtn').addEventListener('click', () => {
-    if (!confirm('Radera all data permanent? Detta kan inte ångras.')) return;
-    systems = []; completedActions = {};
-    saveSystems(); saveActions();
-    renderAll();
-    showToast('All data raderad.', 'success');
+  document.getElementById('clearAllDataBtn').addEventListener('click', async () => {
+    if (!confirm('Radera all data i det här arbetsrummet permanent? Detta kan inte ångras.')) return;
+    try{
+      await apiDelete(`/workspaces/${currentWorkspaceId}/systems`);
+      systems = []; completedActions = {};
+      renderAll();
+      showToast('All data raderad.', 'success');
+    } catch(err){
+      showToast('Kunde inte radera: ' + err.message, 'error');
+    }
   });
 }
 
@@ -1145,7 +1207,7 @@ function updateCustomerChip(){
   document.getElementById('customerNameDisplay').textContent = settings.customer || 'Ej angiven kund';
 }
 
-function loadDemoData(){
+async function loadDemoData(){
   if (systems.length && !confirm('Detta lägger till exempeldata utöver befintliga system. Fortsätta?')) return;
   const demo = [
     { name:'Ekonomisystem Agresso', type:'Affärssystem', vendor:'Unit4', systemOwner:'Ekonomichef', businessOwner:'CFO', criticality:'Hög', lifecycleStatus:'Aktiv', confidentiality:'Hög', integrity:'Hög', availability:'Medel',
@@ -1165,20 +1227,23 @@ function loadDemoData(){
     { name:'Brandvägg Perimeter', type:'Brandvägg', vendor:'Fortinet', systemOwner:'Nätverksansvarig', businessOwner:'IT-chef', criticality:'Mycket hög', lifecycleStatus:'Aktiv', confidentiality:'Medel', integrity:'Hög', availability:'Hög',
       security:{ logging:true, ips:true, ids:true, segmentedNetwork:true }, exposure:{ internetExposed:true, remoteAdmin:true }, data:{ logs:true }, regulations:{ nis2:true, cisControls:true } },
   ];
-  demo.forEach(d => {
-    const sys = Object.assign({
-      id:'sys_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
-      description:'', contactPerson:'', version:'1.0', dependencies:[],
-      security:{}, exposure:{}, data:{}, regulations:{},
-      createdAt:new Date().toISOString(), updatedAt:new Date().toISOString()
-    }, d);
-    const risk = computeRisk(sys);
-    sys.riskScore = risk.score; sys.riskLevel = risk.level; sys.findings = risk.findings;
-    systems.push(sys);
-  });
-  saveSystems();
-  renderAll();
-  showToast('Demodata inläst.', 'success');
+  showToast('Läser in demodata …');
+  try{
+    for (const d of demo){
+      const sys = Object.assign({
+        description:'', contactPerson:'', version:'1.0', dependencies:[],
+        security:{}, exposure:{}, data:{}, regulations:{},
+      }, d);
+      const risk = computeRisk(sys);
+      sys.riskScore = risk.score; sys.riskLevel = risk.level; sys.findings = risk.findings;
+      const saved = await apiPost(`/workspaces/${currentWorkspaceId}/systems`, sys);
+      systems.push(saved);
+    }
+    renderAll();
+    showToast('Demodata inläst.', 'success');
+  } catch(err){
+    showToast('Kunde inte läsa in demodata: ' + err.message, 'error');
+  }
 }
 
 /* ============================================================
@@ -1199,13 +1264,20 @@ function showToast(msg, type){
    ============================================================ */
 
 function initGlobalDelegation(){
-  document.addEventListener('click', e => {
+  document.addEventListener('click', async e => {
     const toggle = e.target.closest('[data-toggle-action]');
     if (toggle){
       const id = toggle.dataset.toggleAction;
-      completedActions[id] = !completedActions[id];
-      saveActions();
+      const newValue = !completedActions[id];
+      completedActions[id] = newValue; // optimistic update
       renderAll();
+      try{
+        await apiPost(`/workspaces/${currentWorkspaceId}/actions`, { actionId:id, completed:newValue });
+      } catch(err){
+        completedActions[id] = !newValue; // revert on failure
+        renderAll();
+        showToast('Kunde inte spara åtgärdsstatus: ' + err.message, 'error');
+      }
       return;
     }
     const openRow = e.target.closest('[data-open-system]');
@@ -1221,7 +1293,6 @@ function initGlobalDelegation(){
 
 function renderAll(){
   recalcAll();
-  saveSystems();
   renderKPIs();
   renderCharts();
   renderDashboardLists();
@@ -1232,11 +1303,75 @@ function renderAll(){
 }
 
 /* ============================================================
-   21. INIT
+   21. WORKSPACE SWITCHER
    ============================================================ */
 
-document.addEventListener('DOMContentLoaded', () => {
-  loadState();
+function renderWorkspaceList(){
+  const el = document.getElementById('workspaceList');
+  if (!workspaces.length){ el.innerHTML = emptyInline('Inga arbetsrum finns ännu — skapa det första nedan.'); return; }
+  el.innerHTML = workspaces.map(w => `
+    <div class="list-row" data-select-workspace="${w.id}">
+      <div class="list-main">
+        <div class="list-title">${esc(w.name)}${w.id === currentWorkspaceId ? ' <span class="badge badge-low">Aktivt</span>' : ''}</div>
+        <div class="list-sub">${esc(w.customer || 'Ingen kund angiven')} · ${esc(w.consultant || 'Ingen konsult angiven')}</div>
+      </div>
+      <i class="fa-solid fa-arrow-right" style="color:var(--c-text-muted);"></i>
+    </div>
+  `).join('');
+  el.querySelectorAll('[data-select-workspace]').forEach(row => {
+    row.addEventListener('click', () => selectWorkspace(row.dataset.selectWorkspace));
+  });
+}
+
+async function selectWorkspace(id){
+  try{
+    await loadWorkspaceData(id);
+    document.getElementById('workspaceModalOverlay').classList.remove('active');
+    document.getElementById('closeWorkspaceModal').style.display = workspaces.length ? 'flex' : 'none';
+    renderAll();
+    showToast(`Arbetsrum: ${settings.name}`, 'success');
+  } catch(err){
+    showToast('Kunde inte öppna arbetsrummet: ' + err.message, 'error');
+  }
+}
+
+function openWorkspaceModal(){
+  renderWorkspaceList();
+  document.getElementById('closeWorkspaceModal').style.display = currentWorkspaceId ? 'flex' : 'none';
+  document.getElementById('workspaceModalOverlay').classList.add('active');
+}
+
+function initWorkspaceSwitcher(){
+  document.getElementById('workspaceSwitcherBtn').addEventListener('click', openWorkspaceModal);
+  document.getElementById('closeWorkspaceModal').addEventListener('click', () => {
+    document.getElementById('workspaceModalOverlay').classList.remove('active');
+  });
+  document.getElementById('createWorkspaceBtn').addEventListener('click', async () => {
+    const name = document.getElementById('ws_name').value.trim();
+    if (!name){ showToast('Namn krävs för arbetsrummet.', 'error'); return; }
+    const body = {
+      name,
+      customer: document.getElementById('ws_customer').value.trim(),
+      consultant: document.getElementById('ws_consultant').value.trim(),
+    };
+    try{
+      const ws = await apiPost('/workspaces', body);
+      workspaces.unshift(ws);
+      document.getElementById('ws_name').value = '';
+      document.getElementById('ws_customer').value = '';
+      document.getElementById('ws_consultant').value = '';
+      await selectWorkspace(ws.id);
+    } catch(err){
+      showToast('Kunde inte skapa arbetsrum: ' + err.message, 'error');
+    }
+  });
+}
+
+/* ============================================================
+   22. INIT
+   ============================================================ */
+
+async function initApp(){
   initNav();
   initGlobalSearch();
   initSystemForm();
@@ -1245,5 +1380,26 @@ document.addEventListener('DOMContentLoaded', () => {
   initReports();
   initSettings();
   initGlobalDelegation();
-  renderAll();
-});
+  initWorkspaceSwitcher();
+
+  try{
+    await loadWorkspaces();
+  } catch(err){
+    showToast('Kunde inte nå API:et. Kör du detta via `wrangler pages dev`?', 'error');
+    return;
+  }
+
+  const lastId = localStorage.getItem(LAST_WORKSPACE_KEY);
+  const lastStillExists = lastId && workspaces.some(w => w.id === lastId);
+
+  if (lastStillExists){
+    await selectWorkspace(lastId);
+  } else if (workspaces.length === 1){
+    await selectWorkspace(workspaces[0].id);
+  } else {
+    // Multiple workspaces or none yet — let the consultant choose/create one.
+    openWorkspaceModal();
+  }
+}
+
+document.addEventListener('DOMContentLoaded', initApp);

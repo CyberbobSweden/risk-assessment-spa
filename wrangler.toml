@@ -1,0 +1,11 @@
+name = "risk-assessment-spa"
+compatibility_date = "2024-09-23"
+pages_build_output_dir = "."
+
+# Bind the D1 database. Replace database_id after creating it with:
+#   wrangler d1 create risk_assessment_db
+# The command prints the database_id — paste it below.
+[[d1_databases]]
+binding = "DB"
+database_name = "risk_assessment_db"
+database_id = "93385b3f-0a02-4405-8e39-2ac51ec1d17b"

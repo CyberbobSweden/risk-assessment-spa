@@ -31,13 +31,14 @@
     </div>
   </div>
   <div class="topbar-right">
-    <div class="customer-chip">
+    <button class="customer-chip" id="workspaceSwitcherBtn" title="Byt arbetsrum">
       <i class="fa-solid fa-building"></i>
       <div>
-        <span class="customer-label">Kund</span>
-        <span class="customer-name" id="customerNameDisplay">Ej angiven kund</span>
+        <span class="customer-label">Arbetsrum</span>
+        <span class="customer-name" id="customerNameDisplay">Inget valt</span>
       </div>
-    </div>
+      <i class="fa-solid fa-chevron-down" style="font-size:10px;opacity:.7;margin-left:2px;"></i>
+    </button>
     <button class="icon-btn" id="newSystemBtnTop" aria-label="Lägg till system"><i class="fa-solid fa-plus"></i></button>
   </div>
 </header>
@@ -340,6 +341,28 @@
     </section>
 
   </main>
+</div>
+
+<!-- ===================== WORKSPACE MODAL ===================== -->
+<div class="modal-overlay" id="workspaceModalOverlay">
+  <div class="modal" id="workspaceModal" style="max-width:520px;">
+    <div class="modal-header">
+      <h2><i class="fa-solid fa-building"></i> Arbetsrum</h2>
+      <button class="icon-btn" id="closeWorkspaceModal" style="display:none;"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <p class="muted" style="margin-bottom:14px;">Ett arbetsrum motsvarar ett kunduppdrag. Data i ett arbetsrum delas mellan alla som har åtkomst.</p>
+      <div id="workspaceList" class="list-body" style="margin-bottom:18px;"></div>
+
+      <h4 class="section-subtitle">Skapa nytt arbetsrum</h4>
+      <div class="form-grid">
+        <div class="form-field span-2"><label>Namn på arbetsrum *</label><input type="text" id="ws_name" placeholder="T.ex. Kund AB – IT-riskinventering 2026"></div>
+        <div class="form-field"><label>Kundnamn</label><input type="text" id="ws_customer" placeholder="Kund AB"></div>
+        <div class="form-field"><label>Konsultansvarig</label><input type="text" id="ws_consultant" placeholder="Namn"></div>
+      </div>
+      <button class="btn btn-primary" id="createWorkspaceBtn" style="margin-top:14px;"><i class="fa-solid fa-plus"></i> Skapa arbetsrum</button>
+    </div>
+  </div>
 </div>
 
 <!-- ===================== SYSTEM FORM MODAL ===================== -->

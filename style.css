@@ -121,7 +121,11 @@ a{ color:var(--c-secondary); }
   display:flex; align-items:center; gap:8px;
   background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.16);
   border-radius:var(--radius-md); padding:6px 12px;
+  font-family:inherit; cursor:pointer; transition:background .15s var(--ease);
 }
+.customer-chip:hover{ background:rgba(255,255,255,0.16); }
+#workspaceList .list-row{ cursor:pointer; }
+#workspaceList .list-row:hover{ border-color:var(--c-secondary); }
 .customer-chip i{ color:var(--c-accent); }
 .customer-chip div{ display:flex; flex-direction:column; line-height:1.15; }
 .customer-label{ font-size:10px; color:rgba(255,255,255,0.55); text-transform:uppercase; letter-spacing:.04em; }
