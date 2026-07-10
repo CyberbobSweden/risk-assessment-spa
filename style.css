@@ -423,7 +423,35 @@ tbody tr:last-child td{ border-bottom:none; }
 .toast.error i{ color:#FCA5A5; }
 @keyframes toastIn{ from{ opacity:0; transform:translateY(10px);} to{ opacity:1; transform:translateY(0);} }
 
-/* ============================= RESPONSIVE ============================= */
+/* ============================= WELCOME SCREEN ============================= */
+.welcome-screen{
+  position:fixed; inset:0; z-index:500;
+  display:none; align-items:center; justify-content:center;
+  padding:32px 20px; overflow-y:auto;
+  background:linear-gradient(135deg, var(--c-primary) 0%, var(--c-primary-600) 55%, #0E3A61 100%);
+}
+.welcome-screen.active{ display:flex; }
+.welcome-card{
+  background:#fff; border-radius:var(--radius-lg); width:100%; max-width:580px;
+  padding:40px 40px 36px; box-shadow:var(--shadow-lg); animation:popIn .3s var(--ease);
+  margin:auto;
+}
+.welcome-brand{ text-align:center; margin-bottom:30px; }
+.brand-mark.large{
+  width:60px; height:60px; border-radius:16px; margin:0 auto 16px;
+  background:linear-gradient(135deg, var(--c-accent), var(--c-secondary));
+  display:flex; align-items:center; justify-content:center; font-size:26px; color:#fff;
+  box-shadow:var(--shadow-md);
+}
+.welcome-brand h1{ font-size:21px; line-height:1.3; }
+.welcome-brand h1 span{ display:block; font-size:13px; font-weight:600; color:var(--c-accent); text-transform:uppercase; letter-spacing:.04em; margin-top:4px; }
+.welcome-brand p{ color:var(--c-text-muted); font-size:13px; margin-top:12px; max-width:440px; margin-left:auto; margin-right:auto; line-height:1.6; }
+#welcomeWorkspaceList .list-row{ cursor:pointer; }
+#welcomeWorkspaceList .list-row:hover{ border-color:var(--c-secondary); }
+
+@media (max-width: 560px){
+  .welcome-card{ padding:28px 22px 26px; }
+}
 @media (max-width: 900px){
   .sidebar{ position:fixed; left:0; z-index:150; margin-left:calc(-1 * var(--sidebar-w)); box-shadow:var(--shadow-lg); }
   .sidebar.mobile-open{ margin-left:0; }

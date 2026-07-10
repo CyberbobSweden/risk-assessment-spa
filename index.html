@@ -12,6 +12,33 @@
 <body>
 
 <!-- ===================== HEADER ===================== -->
+<!-- ===================== WELCOME SCREEN (first-load gate) ===================== -->
+<div class="welcome-screen" id="welcomeScreen">
+  <div class="welcome-card">
+    <div class="welcome-brand">
+      <div class="brand-mark large"><i class="fa-solid fa-shield-halved"></i></div>
+      <h1>Cyber Asset Inventory<span>&amp; Risk Assessment</span></h1>
+      <p>Ett delat verktyg för Combitechs konsulter och kunder att inventera IT-miljöer, identifiera risker och prioritera åtgärder tillsammans.</p>
+    </div>
+
+    <div id="welcomeWorkspaceListWrap" style="display:none;">
+      <h4 class="section-subtitle">Öppna ett arbetsrum</h4>
+      <div class="list-body" id="welcomeWorkspaceList" style="margin-bottom:22px;"></div>
+    </div>
+
+    <h4 class="section-subtitle">Skapa nytt arbetsrum</h4>
+    <p class="muted" style="margin-bottom:14px;">Ett arbetsrum motsvarar ett kunduppdrag. Data i ett arbetsrum delas mellan alla som har åtkomst.</p>
+    <div class="form-grid">
+      <div class="form-field span-2"><label>Namn på arbetsrum *</label><input type="text" id="welcome_ws_name" placeholder="T.ex. Kund AB – IT-riskinventering 2026"></div>
+      <div class="form-field"><label>Kundnamn</label><input type="text" id="welcome_ws_customer" placeholder="Kund AB"></div>
+      <div class="form-field"><label>Konsultansvarig</label><input type="text" id="welcome_ws_consultant" placeholder="Namn"></div>
+    </div>
+    <button class="btn btn-primary" id="welcomeCreateWorkspaceBtn" style="margin-top:16px;width:100%;justify-content:center;">
+      <i class="fa-solid fa-plus"></i> Skapa arbetsrum &amp; kom igång
+    </button>
+  </div>
+</div>
+
 <header class="topbar">
   <div class="topbar-left">
     <button class="icon-btn" id="menuToggle" aria-label="Växla meny"><i class="fa-solid fa-bars"></i></button>

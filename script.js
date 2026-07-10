@@ -1306,8 +1306,8 @@ function renderAll(){
    21. WORKSPACE SWITCHER
    ============================================================ */
 
-function renderWorkspaceList(){
-  const el = document.getElementById('workspaceList');
+function renderWorkspaceListInto(containerId){
+  const el = document.getElementById(containerId);
   if (!workspaces.length){ el.innerHTML = emptyInline('Inga arbetsrum finns ännu — skapa det första nedan.'); return; }
   el.innerHTML = workspaces.map(w => `
     <div class="list-row" data-select-workspace="${w.id}">
@@ -1322,12 +1322,34 @@ function renderWorkspaceList(){
     row.addEventListener('click', () => selectWorkspace(row.dataset.selectWorkspace));
   });
 }
+function renderWorkspaceList(){ renderWorkspaceListInto('workspaceList'); }
+
+async function createWorkspaceAndOpen(name, customer, consultant){
+  if (!name.trim()){ showToast('Namn krävs för arbetsrummet.', 'error'); return; }
+  try{
+    const ws = await apiPost('/workspaces', { name: name.trim(), customer: customer.trim(), consultant: consultant.trim() });
+    workspaces.unshift(ws);
+    await selectWorkspace(ws.id);
+  } catch(err){
+    showToast('Kunde inte skapa arbetsrum: ' + err.message, 'error');
+  }
+}
+
+function showWelcomeScreen(){
+  document.getElementById('welcomeWorkspaceListWrap').style.display = workspaces.length ? 'block' : 'none';
+  renderWorkspaceListInto('welcomeWorkspaceList');
+  document.getElementById('welcomeScreen').classList.add('active');
+}
+function hideWelcomeScreen(){
+  document.getElementById('welcomeScreen').classList.remove('active');
+}
 
 async function selectWorkspace(id){
   try{
     await loadWorkspaceData(id);
     document.getElementById('workspaceModalOverlay').classList.remove('active');
     document.getElementById('closeWorkspaceModal').style.display = workspaces.length ? 'flex' : 'none';
+    hideWelcomeScreen();
     renderAll();
     showToast(`Arbetsrum: ${settings.name}`, 'success');
   } catch(err){
@@ -1346,24 +1368,22 @@ function initWorkspaceSwitcher(){
   document.getElementById('closeWorkspaceModal').addEventListener('click', () => {
     document.getElementById('workspaceModalOverlay').classList.remove('active');
   });
-  document.getElementById('createWorkspaceBtn').addEventListener('click', async () => {
-    const name = document.getElementById('ws_name').value.trim();
-    if (!name){ showToast('Namn krävs för arbetsrummet.', 'error'); return; }
-    const body = {
-      name,
-      customer: document.getElementById('ws_customer').value.trim(),
-      consultant: document.getElementById('ws_consultant').value.trim(),
-    };
-    try{
-      const ws = await apiPost('/workspaces', body);
-      workspaces.unshift(ws);
+  document.getElementById('createWorkspaceBtn').addEventListener('click', () => {
+    const name = document.getElementById('ws_name').value;
+    const customer = document.getElementById('ws_customer').value;
+    const consultant = document.getElementById('ws_consultant').value;
+    createWorkspaceAndOpen(name, customer, consultant).then(() => {
       document.getElementById('ws_name').value = '';
       document.getElementById('ws_customer').value = '';
       document.getElementById('ws_consultant').value = '';
-      await selectWorkspace(ws.id);
-    } catch(err){
-      showToast('Kunde inte skapa arbetsrum: ' + err.message, 'error');
-    }
+    });
+  });
+
+  document.getElementById('welcomeCreateWorkspaceBtn').addEventListener('click', () => {
+    const name = document.getElementById('welcome_ws_name').value;
+    const customer = document.getElementById('welcome_ws_customer').value;
+    const consultant = document.getElementById('welcome_ws_consultant').value;
+    createWorkspaceAndOpen(name, customer, consultant);
   });
 }
 
@@ -1397,8 +1417,9 @@ async function initApp(){
   } else if (workspaces.length === 1){
     await selectWorkspace(workspaces[0].id);
   } else {
-    // Multiple workspaces or none yet — let the consultant choose/create one.
-    openWorkspaceModal();
+    // No remembered workspace (or it was deleted) — greet the user with the
+    // full-screen onboarding gate instead of dropping them into an empty dashboard.
+    showWelcomeScreen();
   }
 }
 
