@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cyber Asset Inventory &amp; Risk Assessment</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ===================== HEADER ===================== -->
+<header class="topbar">
+  <div class="topbar-left">
+    <button class="icon-btn" id="menuToggle" aria-label="Växla meny"><i class="fa-solid fa-bars"></i></button>
+    <div class="brand">
+      <div class="brand-mark"><i class="fa-solid fa-shield-halved"></i></div>
+      <div class="brand-text">
+        <span class="brand-title">Cyber Asset Inventory</span>
+        <span class="brand-subtitle">&amp; Risk Assessment</span>
+      </div>
+    </div>
+  </div>
+  <div class="topbar-center">
+    <div class="global-search">
+      <i class="fa-solid fa-magnifying-glass"></i>
+      <input type="text" id="globalSearch" placeholder="Sök system, leverantör, ägare, regelverk…">
+      <kbd>/</kbd>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="customer-chip">
+      <i class="fa-solid fa-building"></i>
+      <div>
+        <span class="customer-label">Kund</span>
+        <span class="customer-name" id="customerNameDisplay">Ej angiven kund</span>
+      </div>
+    </div>
+    <button class="icon-btn" id="newSystemBtnTop" aria-label="Lägg till system"><i class="fa-solid fa-plus"></i></button>
+  </div>
+</header>
+
+<div class="app-shell">
+  <!-- ===================== SIDEBAR ===================== -->
+  <nav class="sidebar" id="sidebar">
+    <ul class="nav-list">
+      <li class="nav-item active" data-view="dashboard">
+        <i class="fa-solid fa-gauge-high"></i><span>Dashboard</span>
+      </li>
+      <li class="nav-item" data-view="inventory">
+        <i class="fa-solid fa-server"></i><span>Systeminventering</span>
+      </li>
+      <li class="nav-item" data-view="risk">
+        <i class="fa-solid fa-triangle-exclamation"></i><span>Riskanalys</span>
+      </li>
+      <li class="nav-item" data-view="dependencies">
+        <i class="fa-solid fa-diagram-project"></i><span>Beroenden</span>
+      </li>
+      <li class="nav-item" data-view="reports">
+        <i class="fa-solid fa-file-lines"></i><span>Rapporter</span>
+      </li>
+      <li class="nav-item" data-view="settings">
+        <i class="fa-solid fa-gear"></i><span>Inställningar</span>
+      </li>
+    </ul>
+    <div class="sidebar-footer">
+      <div class="progress-mini">
+        <span class="progress-mini-label">Åtgärder klara</span>
+        <div class="progress-track"><div class="progress-fill" id="sidebarActionProgress" style="width:0%"></div></div>
+        <span class="progress-mini-pct" id="sidebarActionPct">0%</span>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ===================== MAIN CONTENT ===================== -->
+  <main class="content">
+
+    <!-- ---------- DASHBOARD VIEW ---------- -->
+    <section class="view active" id="view-dashboard">
+      <div class="view-header">
+        <div>
+          <h1>Dashboard</h1>
+          <p class="view-subtitle">Översikt av organisationens IT-miljö och risk­exponering</p>
+        </div>
+        <button class="btn btn-primary" data-action="open-new-system"><i class="fa-solid fa-plus"></i> Lägg till system</button>
+      </div>
+
+      <div class="kpi-grid" id="kpiGrid"><!-- KPI cards injected by JS --></div>
+
+      <div class="dash-grid">
+        <div class="card chart-card">
+          <div class="card-header"><h3>Riskfördelning</h3></div>
+          <div class="chart-wrap"><canvas id="chartRiskDist"></canvas></div>
+        </div>
+        <div class="card chart-card">
+          <div class="card-header"><h3>Systemtyper</h3></div>
+          <div class="chart-wrap"><canvas id="chartSystemTypes"></canvas></div>
+        </div>
+        <div class="card chart-card">
+          <div class="card-header"><h3>Moln vs. On-prem</h3></div>
+          <div class="chart-wrap"><canvas id="chartCloudOnprem"></canvas></div>
+        </div>
+        <div class="card chart-card">
+          <div class="card-header"><h3>Säkerhetskontroller</h3></div>
+          <div class="chart-wrap"><canvas id="chartSecurityControls"></canvas></div>
+        </div>
+        <div class="card chart-card">
+          <div class="card-header"><h3>Regelverk</h3></div>
+          <div class="chart-wrap"><canvas id="chartRegulations"></canvas></div>
+        </div>
+        <div class="card chart-card">
+          <div class="card-header"><h3>Leverantörer</h3></div>
+          <div class="chart-wrap"><canvas id="chartVendors"></canvas></div>
+        </div>
+      </div>
+
+      <div class="dash-lists">
+        <div class="card">
+          <div class="card-header"><h3><i class="fa-solid fa-ranking-star"></i> Top 10 största riskerna</h3></div>
+          <div class="list-body" id="top10Risks"></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3><i class="fa-solid fa-bolt"></i> Quick Wins</h3></div>
+          <div class="list-body" id="quickWins"></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3><i class="fa-solid fa-fire"></i> Mest kritiska system</h3></div>
+          <div class="list-body" id="mostCritical"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h3><i class="fa-solid fa-list-check"></i> Prioriterade åtgärder</h3></div>
+        <div class="list-body" id="priorityActions"></div>
+      </div>
+    </section>
+
+    <!-- ---------- INVENTORY (LIST) VIEW ---------- -->
+    <section class="view" id="view-inventory">
+      <div class="view-header">
+        <div>
+          <h1>Systeminventering</h1>
+          <p class="view-subtitle">Alla registrerade system, applikationer och tjänster</p>
+        </div>
+        <button class="btn btn-primary" data-action="open-new-system"><i class="fa-solid fa-plus"></i> Lägg till system</button>
+      </div>
+
+      <div class="card filter-bar">
+        <div class="filter-group">
+          <label>Risk</label>
+          <select id="filterRisk"><option value="">Alla</option><option value="Låg">Låg</option><option value="Medel">Medel</option><option value="Hög">Hög</option><option value="Kritisk">Kritisk</option></select>
+        </div>
+        <div class="filter-group">
+          <label>Leverantör</label>
+          <select id="filterVendor"><option value="">Alla</option></select>
+        </div>
+        <div class="filter-group">
+          <label>Regelverk</label>
+          <select id="filterRegulation"><option value="">Alla</option></select>
+        </div>
+        <div class="filter-group">
+          <label>Ägare</label>
+          <select id="filterOwner"><option value="">Alla</option></select>
+        </div>
+        <div class="filter-group">
+          <label>Molntjänst</label>
+          <select id="filterCloud"><option value="">Alla</option><option value="yes">Endast moln</option><option value="no">Endast on-prem</option></select>
+        </div>
+        <div class="filter-group">
+          <label>Affärskritikalitet</label>
+          <select id="filterCriticality"><option value="">Alla</option><option value="Låg">Låg</option><option value="Medel">Medel</option><option value="Hög">Hög</option><option value="Mycket hög">Mycket hög</option></select>
+        </div>
+        <button class="btn btn-ghost" id="clearFilters"><i class="fa-solid fa-filter-circle-xmark"></i> Rensa filter</button>
+      </div>
+
+      <div class="card table-card">
+        <div class="table-wrap">
+          <table id="systemsTable">
+            <thead>
+              <tr>
+                <th data-sort="name">System <i class="fa-solid fa-sort"></i></th>
+                <th data-sort="type">Typ <i class="fa-solid fa-sort"></i></th>
+                <th data-sort="vendor">Leverantör <i class="fa-solid fa-sort"></i></th>
+                <th data-sort="criticality">Kritikalitet <i class="fa-solid fa-sort"></i></th>
+                <th data-sort="riskScore">Riskpoäng <i class="fa-solid fa-sort"></i></th>
+                <th data-sort="riskLevel">Risknivå <i class="fa-solid fa-sort"></i></th>
+                <th data-sort="exposed">Exponering</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="systemsTableBody"></tbody>
+          </table>
+        </div>
+        <div class="empty-state" id="inventoryEmptyState" style="display:none;">
+          <i class="fa-solid fa-server"></i>
+          <h3>Inga system registrerade ännu</h3>
+          <p>Lägg till organisationens första system för att starta riskanalysen.</p>
+          <button class="btn btn-primary" data-action="open-new-system"><i class="fa-solid fa-plus"></i> Lägg till system</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- RISK ANALYSIS VIEW ---------- -->
+    <section class="view" id="view-risk">
+      <div class="view-header">
+        <div>
+          <h1>Riskanalys</h1>
+          <p class="view-subtitle">Identifierade brister och rekommenderade åtgärder per system</p>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3>Rekommenderade åtgärder — hela miljön</h3></div>
+        <div class="list-body" id="riskActionsFull"></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3>Riskdetaljer per system</h3></div>
+        <div class="list-body" id="riskPerSystem"></div>
+      </div>
+    </section>
+
+    <!-- ---------- DEPENDENCIES VIEW ---------- -->
+    <section class="view" id="view-dependencies">
+      <div class="view-header">
+        <div>
+          <h1>Beroenden &amp; leverantörskedjor</h1>
+          <p class="view-subtitle">Kopplingar mellan system samt leverantörers räckvidd i miljön</p>
+        </div>
+      </div>
+      <div class="dash-grid two-col">
+        <div class="card">
+          <div class="card-header"><h3><i class="fa-solid fa-diagram-project"></i> Systemberoenden</h3></div>
+          <div class="list-body" id="dependencyList"></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3><i class="fa-solid fa-truck-field"></i> Leverantörskedjor</h3></div>
+          <div class="list-body" id="vendorChains"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- REPORTS VIEW ---------- -->
+    <section class="view" id="view-reports">
+      <div class="view-header">
+        <div>
+          <h1>Rapporter</h1>
+          <p class="view-subtitle">Generera och exportera rapporter för olika mottagare</p>
+        </div>
+      </div>
+      <div class="report-grid">
+        <div class="card report-card" data-report="executive">
+          <div class="report-icon"><i class="fa-solid fa-briefcase"></i></div>
+          <h3>Executive Summary</h3>
+          <p>Kortfattad översikt för ledningen med övergripande riskbild.</p>
+          <button class="btn btn-secondary" data-action="generate-report" data-report="executive">Generera</button>
+        </div>
+        <div class="card report-card" data-report="technical">
+          <div class="report-icon"><i class="fa-solid fa-microchip"></i></div>
+          <h3>Teknisk rapport</h3>
+          <p>Detaljerad genomgång av system, kontroller och konfiguration.</p>
+          <button class="btn btn-secondary" data-action="generate-report" data-report="technical">Generera</button>
+        </div>
+        <div class="card report-card" data-report="risk">
+          <div class="report-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+          <h3>Riskrapport</h3>
+          <p>Samtliga identifierade risker rangordnade med åtgärdsförslag.</p>
+          <button class="btn btn-secondary" data-action="generate-report" data-report="risk">Generera</button>
+        </div>
+        <div class="card report-card" data-report="management">
+          <div class="report-icon"><i class="fa-solid fa-users-gear"></i></div>
+          <h3>Ledningsrapport</h3>
+          <p>Statusrapport med KPI:er, trender och prioriterade beslut.</p>
+          <button class="btn btn-secondary" data-action="generate-report" data-report="management">Generera</button>
+        </div>
+        <div class="card report-card" data-report="audit">
+          <div class="report-icon"><i class="fa-solid fa-clipboard-check"></i></div>
+          <h3>Revisionsrapport</h3>
+          <p>Regelefterlevnad och spårbarhet mot valda regelverk.</p>
+          <button class="btn btn-secondary" data-action="generate-report" data-report="audit">Generera</button>
+        </div>
+      </div>
+
+      <div class="card" id="reportPreviewCard" style="display:none;">
+        <div class="card-header">
+          <h3 id="reportPreviewTitle">Rapportförhandsgranskning</h3>
+          <div class="export-buttons">
+            <button class="btn btn-ghost btn-sm" data-export="pdf"><i class="fa-solid fa-file-pdf"></i> PDF</button>
+            <button class="btn btn-ghost btn-sm" data-export="excel"><i class="fa-solid fa-file-excel"></i> Excel</button>
+            <button class="btn btn-ghost btn-sm" data-export="csv"><i class="fa-solid fa-file-csv"></i> CSV</button>
+            <button class="btn btn-ghost btn-sm" data-export="json"><i class="fa-solid fa-file-code"></i> JSON</button>
+          </div>
+        </div>
+        <div class="report-preview" id="reportPreviewBody"></div>
+      </div>
+    </section>
+
+    <!-- ---------- SETTINGS VIEW ---------- -->
+    <section class="view" id="view-settings">
+      <div class="view-header">
+        <div>
+          <h1>Inställningar</h1>
+          <p class="view-subtitle">Projekt- och kunduppgifter samt datahantering</p>
+        </div>
+      </div>
+      <div class="card settings-card">
+        <div class="card-header"><h3>Projektinformation</h3></div>
+        <div class="form-grid">
+          <div class="form-field">
+            <label>Konsultbolag</label>
+            <input type="text" id="settingsConsultancy" value="Combitech">
+          </div>
+          <div class="form-field">
+            <label>Kundnamn</label>
+            <input type="text" id="settingsCustomer" placeholder="T.ex. Kund AB">
+          </div>
+          <div class="form-field">
+            <label>Projektnamn</label>
+            <input type="text" id="settingsProject" placeholder="T.ex. IT-riskinventering 2026">
+          </div>
+          <div class="form-field">
+            <label>Konsultansvarig</label>
+            <input type="text" id="settingsConsultant" placeholder="Namn">
+          </div>
+        </div>
+        <button class="btn btn-primary" id="saveSettingsBtn"><i class="fa-solid fa-floppy-disk"></i> Spara inställningar</button>
+      </div>
+
+      <div class="card settings-card">
+        <div class="card-header"><h3>Datahantering</h3></div>
+        <p class="muted">All data lagras lokalt i webbläsaren (LocalStorage). Ingen data skickas till någon server.</p>
+        <div class="settings-actions">
+          <button class="btn btn-secondary" id="exportAllJsonBtn"><i class="fa-solid fa-download"></i> Exportera all data (JSON)</button>
+          <button class="btn btn-secondary" id="importJsonBtn"><i class="fa-solid fa-upload"></i> Importera data (JSON)</button>
+          <input type="file" id="importJsonInput" accept="application/json" style="display:none;">
+          <button class="btn btn-secondary" id="loadDemoBtn"><i class="fa-solid fa-flask"></i> Ladda demodata</button>
+          <button class="btn btn-danger" id="clearAllDataBtn"><i class="fa-solid fa-trash"></i> Radera all data</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ===================== SYSTEM FORM MODAL ===================== -->
+<div class="modal-overlay" id="systemModalOverlay">
+  <div class="modal" id="systemModal">
+    <div class="modal-header">
+      <h2 id="systemModalTitle"><i class="fa-solid fa-server"></i> Lägg till system</h2>
+      <button class="icon-btn" id="closeSystemModal"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <div class="modal-progress">
+      <div class="step active" data-step="1"><span>1</span>Grundinfo</div>
+      <div class="step" data-step="2"><span>2</span>Klassning</div>
+      <div class="step" data-step="3"><span>3</span>Säkerhet</div>
+      <div class="step" data-step="4"><span>4</span>Exponering &amp; Data</div>
+      <div class="step" data-step="5"><span>5</span>Regelverk</div>
+    </div>
+
+    <form id="systemForm" class="modal-body">
+      <input type="hidden" id="systemId">
+
+      <!-- STEP 1: Grundinfo + Typ -->
+      <div class="form-step active" data-step="1">
+        <div class="form-grid">
+          <div class="form-field span-2"><label>Systemnamn *</label><input type="text" id="f_name" required></div>
+          <div class="form-field span-2"><label>Beskrivning</label><textarea id="f_description" rows="2"></textarea></div>
+          <div class="form-field"><label>Systemägare</label><input type="text" id="f_systemOwner"></div>
+          <div class="form-field"><label>Verksamhetsägare</label><input type="text" id="f_businessOwner"></div>
+          <div class="form-field"><label>Leverantör</label><input type="text" id="f_vendor"></div>
+          <div class="form-field"><label>Kontaktperson</label><input type="text" id="f_contactPerson"></div>
+          <div class="form-field"><label>Version</label><input type="text" id="f_version"></div>
+          <div class="form-field">
+            <label>Livscykelstatus</label>
+            <select id="f_lifecycleStatus">
+              <option>Aktiv</option><option>Under införande</option><option>Ska avvecklas</option><option>Föråldrat / Legacy</option><option>Ej längre supporterat</option>
+            </select>
+          </div>
+          <div class="form-field span-2">
+            <label>Typ av system *</label>
+            <select id="f_type" required>
+              <option value="">Välj typ…</option>
+              <option>Affärssystem</option><option>OT</option><option>ICS</option><option>SCADA</option>
+              <option>Server</option><option>Databas</option><option>Webbapplikation</option><option>Mobilapp</option>
+              <option>SaaS</option><option>Azure</option><option>AWS</option><option>Google Cloud</option>
+              <option>Microsoft 365</option><option>Nätverksutrustning</option><option>Brandvägg</option><option>Annat</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 2: Klassning -->
+      <div class="form-step" data-step="2">
+        <div class="form-grid">
+          <div class="form-field">
+            <label>Affärskritikalitet</label>
+            <select id="f_criticality"><option>Låg</option><option>Medel</option><option>Hög</option><option>Mycket hög</option></select>
+          </div>
+        </div>
+        <h4 class="section-subtitle">Informationsklassning</h4>
+        <div class="form-grid three-col">
+          <div class="form-field"><label>Konfidentialitet</label><select id="f_confidentiality"><option>Låg</option><option>Medel</option><option>Hög</option></select></div>
+          <div class="form-field"><label>Riktighet</label><select id="f_integrity"><option>Låg</option><option>Medel</option><option>Hög</option></select></div>
+          <div class="form-field"><label>Tillgänglighet</label><select id="f_availability"><option>Låg</option><option>Medel</option><option>Hög</option></select></div>
+        </div>
+      </div>
+
+      <!-- STEP 3: Säkerhet -->
+      <div class="form-step" data-step="3">
+        <h4 class="section-subtitle">Säkerhetskontroller</h4>
+        <div class="checkbox-grid" id="securityChecklist"></div>
+      </div>
+
+      <!-- STEP 4: Exponering + Data -->
+      <div class="form-step" data-step="4">
+        <h4 class="section-subtitle">Exponering</h4>
+        <div class="checkbox-grid" id="exposureChecklist"></div>
+        <h4 class="section-subtitle">Data som behandlas</h4>
+        <div class="checkbox-grid" id="dataChecklist"></div>
+      </div>
+
+      <!-- STEP 5: Regelverk -->
+      <div class="form-step" data-step="5">
+        <h4 class="section-subtitle">Tillämpliga regelverk</h4>
+        <div class="checkbox-grid" id="regulationChecklist"></div>
+        <h4 class="section-subtitle">Beroenden till andra system</h4>
+        <div class="form-field"><select id="f_dependencies" multiple size="6"></select></div>
+        <p class="muted">Håll in Ctrl/Cmd för att välja flera.</p>
+      </div>
+    </form>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="prevStepBtn"><i class="fa-solid fa-arrow-left"></i> Föregående</button>
+      <div class="modal-footer-right">
+        <button class="btn btn-secondary" id="cancelSystemBtn">Avbryt</button>
+        <button class="btn btn-primary" id="nextStepBtn">Nästa <i class="fa-solid fa-arrow-right"></i></button>
+        <button class="btn btn-primary" id="saveSystemBtn" style="display:none;"><i class="fa-solid fa-floppy-disk"></i> Spara &amp; analysera</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== SYSTEM DETAIL DRAWER ===================== -->
+<div class="drawer-overlay" id="detailDrawerOverlay">
+  <div class="drawer" id="detailDrawer">
+    <div class="drawer-header">
+      <h2 id="detailDrawerTitle">Systemdetaljer</h2>
+      <button class="icon-btn" id="closeDrawerBtn"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="drawer-body" id="detailDrawerBody"></div>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
