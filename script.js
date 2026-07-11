@@ -79,6 +79,7 @@ const RISK_BADGE_CLASS = { 'Låg':'badge-low', 'Medel':'badge-medium', 'Hög':'b
 let systems = [];          // array of system objects (cache of the current workspace's data)
 let settings = {};         // project/customer settings (mirrors the current workspace row)
 let completedActions = {}; // { actionId: true }
+let actionOverrides = {}; // { actionId: { effect, cost, note } } — per-workspace tuning of the default ratings
 let charts = {};           // Chart.js instances keyed by canvas id
 let currentWizardStep = 1;
 let editingSystemId = null;
@@ -130,17 +131,19 @@ async function loadWorkspaces(){
   return workspaces;
 }
 
-/** Loads everything for one workspace: metadata (-> settings), systems, action status. */
+/** Loads everything for one workspace: metadata (-> settings), systems, action status, rating overrides. */
 async function loadWorkspaceData(workspaceId){
-  const [ws, sysList, actions] = await Promise.all([
+  const [ws, sysList, actions, overrides] = await Promise.all([
     apiGet(`/workspaces/${workspaceId}`),
     apiGet(`/workspaces/${workspaceId}/systems`),
     apiGet(`/workspaces/${workspaceId}/actions`),
+    apiGet(`/workspaces/${workspaceId}/action-overrides`),
   ]);
   currentWorkspaceId = workspaceId;
   settings = { customer: ws.customer, project: ws.project, consultancy: ws.consultancy, consultant: ws.consultant, name: ws.name };
   systems = sysList;
   completedActions = actions;
+  actionOverrides = overrides;
   localStorage.setItem(LAST_WORKSPACE_KEY, workspaceId);
 }
 
@@ -203,20 +206,59 @@ function computeRisk(sys){
   return { score, level, findings };
 }
 
-/* Recommendation catalogue: maps a finding category to a recommended action with effect/cost ratings (1-5) */
+/* Recommendation catalogue: maps a finding category to a recommended action with
+   default effect/cost ratings (1-5) plus short rationale text for each rating.
+   Consultants can override the ratings (and add a note) per workspace — see
+   ACTION_OVERRIDES state and the edit UI in renderPriorityActions(). */
 const ACTION_CATALOGUE = {
-  mfa:            { title:'Inför MFA', effect:5, cost:2, desc:'Kräv multifaktorautentisering för samtliga användare och administratörer.' },
-  backup:         { title:'Implementera backup-rutin', effect:5, cost:2, desc:'Etablera regelbunden backup med definierad RPO/RTO.' },
-  immutableBackup:{ title:'Inför immutable backup', effect:4, cost:3, desc:'Skydda backuper mot manipulation och ransomware genom immutability.' },
-  logging:        { title:'Implementera central loggning', effect:4, cost:2, desc:'Aktivera och centralisera loggning för spårbarhet och incidentutredning.' },
-  siem:           { title:'Anslut till SIEM', effect:4, cost:3, desc:'Koppla systemets loggar till SIEM för korrelation och detektion.' },
-  edr:            { title:'Aktivera EDR/XDR', effect:5, cost:3, desc:'Installera EDR/XDR för detektion och respons på endpoint-nivå.' },
-  segmentedNetwork:{ title:'Segmentera nätverket', effect:4, cost:4, desc:'Dela upp nätverket för att begränsa lateral rörelse vid intrång.' },
-  zeroTrust:      { title:'Inför Zero Trust-principer', effect:3, cost:4, desc:'Verifiera varje åtkomst oavsett nätverksplacering.' },
-  vulnScanning:   { title:'Inför sårbarhetsskanning', effect:4, cost:2, desc:'Schemalägg regelbunden skanning av sårbarheter.' },
-  pentestLastYear:{ title:'Genomför penetrationstest', effect:3, cost:3, desc:'Testa systemets motståndskraft genom ett auktoriserat penetrationstest.' },
-  waf:            { title:'Inför WAF', effect:3, cost:2, desc:'Skydda webbapplikationen mot vanliga attacker med en brandvägg för applikationer.' },
-  encryption:     { title:'Kryptera känslig data', effect:5, cost:2, desc:'Kryptera data i vila och under överföring för känsliga informationsklasser.' },
+  mfa: { title:'Inför MFA', effect:5, cost:2,
+    desc:'Kräv multifaktorautentisering för samtliga användare och administratörer.',
+    effectDesc:'Stoppar de allra flesta kontokapningar och phishing-baserade intrång direkt.',
+    costDesc:'Oftast inbyggt i befintlig identitetsplattform (Entra ID, Okta), snabb utrullning.' },
+  backup: { title:'Implementera backup-rutin', effect:5, cost:2,
+    desc:'Etablera regelbunden backup med definierad RPO/RTO.',
+    effectDesc:'Avgörande för att kunna återställa verksamheten efter ransomware eller dataförlust.',
+    costDesc:'Standardfunktion i de flesta plattformar/moln.' },
+  immutableBackup: { title:'Inför immutable backup', effect:4, cost:3,
+    desc:'Skydda backuper mot manipulation och ransomware genom immutability.',
+    effectDesc:'Skyddar backuper specifikt mot att själva bli krypterade eller raderade av en angripare.',
+    costDesc:'Kräver specifik lagringsfunktion/licens utöver vanlig backup.' },
+  logging: { title:'Implementera central loggning', effect:4, cost:2,
+    desc:'Aktivera och centralisera loggning för spårbarhet och incidentutredning.',
+    effectDesc:'Gör intrång upptäckbara och möjliggör utredning i efterhand.',
+    costDesc:'Ofta inbyggt, mest en aktivering.' },
+  siem: { title:'Anslut till SIEM', effect:4, cost:3,
+    desc:'Koppla systemets loggar till SIEM för korrelation och detektion.',
+    effectDesc:'Korrelerar loggar för att upptäcka mönster en människa inte skulle se manuellt.',
+    costDesc:'Ny verktygsintegration, licens och konfiguration.' },
+  edr: { title:'Aktivera EDR/XDR', effect:5, cost:3,
+    desc:'Installera EDR/XDR för detektion och respons på endpoint-nivå.',
+    effectDesc:'Detekterar och stoppar skadlig aktivitet direkt på enheten, inte bara i nätverket.',
+    costDesc:'Licenskostnad plus utrullning av agent på alla enheter.' },
+  segmentedNetwork: { title:'Segmentera nätverket', effect:4, cost:4,
+    desc:'Dela upp nätverket för att begränsa lateral rörelse vid intrång.',
+    effectDesc:'Begränsar hur långt en angripare kan röra sig om ett system komprometteras.',
+    costDesc:'Kräver faktiskt infrastrukturarbete, ofta med driftstopp.' },
+  zeroTrust: { title:'Inför Zero Trust-principer', effect:3, cost:4,
+    desc:'Verifiera varje åtkomst oavsett nätverksplacering.',
+    effectDesc:'Minskar skadan av läckta autentiseringsuppgifter genom kontinuerlig verifiering.',
+    costDesc:'Arkitekturförändring i hela organisationen, inte en punktinsats.' },
+  vulnScanning: { title:'Inför sårbarhetsskanning', effect:4, cost:2,
+    desc:'Schemalägg regelbunden skanning av sårbarheter.',
+    effectDesc:'Hittar kända sårbarheter innan angripare gör det.',
+    costDesc:'Verktygsbaserat, snabbt att sätta upp.' },
+  pentestLastYear: { title:'Genomför penetrationstest', effect:3, cost:3,
+    desc:'Testa systemets motståndskraft genom ett auktoriserat penetrationstest.',
+    effectDesc:'Avslöjar verkliga, utnyttjningsbara svagheter som automatisk skanning missar.',
+    costDesc:'Extern konsulttjänst, en återkommande kostnad.' },
+  waf: { title:'Inför WAF', effect:3, cost:2,
+    desc:'Skydda webbapplikationen mot vanliga attacker med en brandvägg för applikationer.',
+    effectDesc:'Blockerar vanliga webbattacker (SQL-injektion, XSS) innan de når applikationen.',
+    costDesc:'Molnbaserade WAF-tjänster kan aktiveras på minuter.' },
+  encryption: { title:'Kryptera känslig data', effect:5, cost:2,
+    desc:'Kryptera data i vila och under överföring för känsliga informationsklasser.',
+    effectDesc:'Gör stulen data oanvändbar för angriparen utan nyckeln.',
+    costDesc:'Oftast en konfigurationsändring, inte ny infrastruktur.' },
 };
 
 const STAR_MAX = 5;
@@ -224,6 +266,15 @@ function starRating(n){
   let out = '';
   for(let i=1;i<=STAR_MAX;i++){ out += i<=n ? '★' : '<span class="off">★</span>'; }
   return out;
+}
+/** Interactive 1-5 star picker used in the action editor. */
+function starPickerHTML(name, actionId, current){
+  let html = `<span class="star-picker" data-picker="${name}" data-action-id="${esc(actionId)}">`;
+  for(let i=1;i<=STAR_MAX;i++){
+    html += `<i class="fa-solid fa-star star-pick ${i<=current ? 'on' : ''}" data-value="${i}"></i>`;
+  }
+  html += `</span>`;
+  return html;
 }
 
 /* ============================================================
@@ -404,7 +455,7 @@ function renderDashboardLists(){
   renderTop10Risks();
   renderQuickWins();
   renderMostCritical();
-  renderPriorityActions('priorityActions', 6);
+  renderPriorityActions('priorityActions', 6, false);
 }
 
 function renderTop10Risks(){
@@ -436,7 +487,7 @@ function renderQuickWins(){
         <div class="list-title">${esc(a.title)}</div>
         <div class="list-sub">${a.affectedCount} system berörs</div>
       </div>
-      <span class="stars" title="Effekt">${starRating(a.effect)}</span>
+      <span class="stars" title="${esc(a.effectDesc)}">${starRating(a.effect)}</span>
     </div>
   `).join('');
 }
@@ -458,7 +509,8 @@ function renderMostCritical(){
 
 /**
  * Aggregates recommended actions across all systems: one entry per action category,
- * with the number of affected systems and combined priority.
+ * with the number of affected systems, combined priority, and any workspace-specific
+ * effect/cost override applied on top of the catalogue defaults.
  */
 function aggregateActions(){
   const map = {};
@@ -468,7 +520,16 @@ function aggregateActions(){
       const cat = f.category;
       if (!map[cat]){
         const base = ACTION_CATALOGUE[cat];
-        map[cat] = { id:cat, title:base.title, desc:base.desc, effect:base.effect, cost:base.cost, affectedCount:0, systemIds:[] };
+        const override = actionOverrides[cat];
+        map[cat] = {
+          id: cat, title: base.title, desc: base.desc,
+          effect: (override && override.effect) || base.effect,
+          cost: (override && override.cost) || base.cost,
+          effectDesc: base.effectDesc, costDesc: base.costDesc,
+          note: (override && override.note) || '',
+          isOverridden: !!override,
+          affectedCount: 0, systemIds: [],
+        };
       }
       map[cat].affectedCount++;
       map[cat].systemIds.push(sys.id);
@@ -477,25 +538,125 @@ function aggregateActions(){
   return Object.values(map).sort((a,b) => (b.effect*b.affectedCount) - (a.effect*a.affectedCount));
 }
 
-function renderPriorityActions(targetId, limit){
+let openActionEditorId = null;
+let actionEditDraft = null;
+
+function renderPriorityActions(targetId, limit, editable){
   const el = document.getElementById(targetId);
   const agg = aggregateActions().slice(0, limit || 999);
   if (!agg.length){ el.innerHTML = emptyInline('Inga åtgärder att prioritera — miljön ser bra ut!'); return; }
   el.innerHTML = agg.map((a,i) => `
-    <div class="list-row action-row ${completedActions[a.id] ? 'done' : ''}">
-      <div class="action-check ${completedActions[a.id] ? 'done' : ''}" data-toggle-action="${a.id}">${completedActions[a.id] ? '<i class="fa-solid fa-check"></i>' : ''}</div>
-      <div class="list-rank">${i+1}</div>
-      <div class="list-main">
-        <div class="list-title">${esc(a.title)}</div>
-        <div class="list-sub">${esc(a.desc)} · ${a.affectedCount} system berörs</div>
+    <div class="action-block">
+      <div class="list-row action-row ${completedActions[a.id] ? 'done' : ''}">
+        <div class="action-check ${completedActions[a.id] ? 'done' : ''}" data-toggle-action="${a.id}">${completedActions[a.id] ? '<i class="fa-solid fa-check"></i>' : ''}</div>
+        <div class="list-rank">${i+1}</div>
+        <div class="list-main">
+          <div class="list-title">${esc(a.title)}${a.isOverridden ? ' <span class="badge badge-neutral">Anpassad</span>' : ''}</div>
+          <div class="list-sub">${esc(a.desc)} · ${a.affectedCount} system berörs</div>
+          ${a.note ? `<div class="cell-sub" style="margin-top:3px;font-style:italic;">Anteckning: ${esc(a.note)}</div>` : ''}
+        </div>
+        <div style="text-align:right;">
+          <div class="stars" title="${esc(a.effectDesc)}">${starRating(a.effect)}</div>
+          <div class="cell-sub">Kostnad: <span class="stars" title="${esc(a.costDesc)}">${starRating(a.cost)}</span></div>
+        </div>
+        ${editable ? `<button class="btn btn-ghost btn-sm" data-edit-action="${a.id}" title="Justera effekt/kostnad"><i class="fa-solid fa-sliders"></i></button>` : ''}
       </div>
-      <div style="text-align:right;">
-        <div class="stars" title="Effekt">${starRating(a.effect)}</div>
-        <div class="cell-sub">Kostnad: <span class="stars">${starRating(a.cost)}</span></div>
-      </div>
+      ${editable ? `<div class="action-editor" id="editor-${a.id}" style="display:none;"></div>` : ''}
     </div>
   `).join('');
   updateActionProgress(agg);
+  if (editable){
+    el.querySelectorAll('[data-edit-action]').forEach(btn => {
+      btn.addEventListener('click', () => toggleActionEditor(btn.dataset.editAction));
+    });
+    if (openActionEditorId) renderActionEditor(openActionEditorId);
+  }
+}
+
+function toggleActionEditor(actionId){
+  const panel = document.getElementById(`editor-${actionId}`);
+  if (!panel) return;
+  if (openActionEditorId === actionId){
+    openActionEditorId = null;
+    actionEditDraft = null;
+    panel.style.display = 'none';
+    return;
+  }
+  if (openActionEditorId){
+    const prev = document.getElementById(`editor-${openActionEditorId}`);
+    if (prev) prev.style.display = 'none';
+  }
+  openActionEditorId = actionId;
+  const a = aggregateActions().find(x => x.id === actionId);
+  actionEditDraft = { effect: a.effect, cost: a.cost, note: a.note };
+  panel.style.display = 'block';
+  renderActionEditor(actionId);
+}
+
+function renderActionEditor(actionId){
+  const panel = document.getElementById(`editor-${actionId}`);
+  if (!panel) return;
+  const a = aggregateActions().find(x => x.id === actionId);
+  panel.innerHTML = `
+    <div class="editor-row">
+      <div class="editor-field">
+        <label>Effekt — ${esc(a.effectDesc)}</label>
+        ${starPickerHTML('effect', actionId, actionEditDraft.effect)}
+      </div>
+      <div class="editor-field">
+        <label>Kostnad — ${esc(a.costDesc)}</label>
+        ${starPickerHTML('cost', actionId, actionEditDraft.cost)}
+      </div>
+    </div>
+    <div class="form-field" style="margin-top:10px;">
+      <label>Anteckning (valfritt) — varför just den här bedömningen för det här arbetsrummet?</label>
+      <textarea rows="2" id="editorNote-${actionId}" placeholder="T.ex. Kunden har redan Entra ID P2, MFA är gratis för oss.">${esc(actionEditDraft.note)}</textarea>
+    </div>
+    <div class="editor-actions">
+      <button class="btn btn-ghost btn-sm" data-reset-action="${actionId}"><i class="fa-solid fa-rotate-left"></i> Återställ till standard</button>
+      <button class="btn btn-primary btn-sm" data-save-action="${actionId}"><i class="fa-solid fa-check"></i> Spara</button>
+    </div>
+  `;
+  panel.querySelectorAll('.star-pick').forEach(star => {
+    star.addEventListener('click', () => {
+      const picker = star.closest('.star-picker');
+      const name = picker.dataset.picker;
+      const value = parseInt(star.dataset.value, 10);
+      actionEditDraft[name] = value;
+      picker.querySelectorAll('.star-pick').forEach(s => s.classList.toggle('on', parseInt(s.dataset.value,10) <= value));
+    });
+  });
+  panel.querySelector(`#editorNote-${actionId}`).addEventListener('input', e => { actionEditDraft.note = e.target.value; });
+  panel.querySelector(`[data-save-action="${actionId}"]`).addEventListener('click', () => saveActionOverride(actionId));
+  panel.querySelector(`[data-reset-action="${actionId}"]`).addEventListener('click', () => resetActionOverride(actionId));
+}
+
+async function saveActionOverride(actionId){
+  try{
+    await apiPost(`/workspaces/${currentWorkspaceId}/action-overrides`, {
+      actionId, effect: actionEditDraft.effect, cost: actionEditDraft.cost, note: actionEditDraft.note,
+    });
+    actionOverrides[actionId] = { effect: actionEditDraft.effect, cost: actionEditDraft.cost, note: actionEditDraft.note };
+    openActionEditorId = null;
+    actionEditDraft = null;
+    renderAll();
+    showToast('Åtgärd uppdaterad.', 'success');
+  } catch(err){
+    showToast('Kunde inte spara: ' + err.message, 'error');
+  }
+}
+
+async function resetActionOverride(actionId){
+  try{
+    await apiDelete(`/workspaces/${currentWorkspaceId}/action-overrides/${actionId}`);
+    delete actionOverrides[actionId];
+    openActionEditorId = null;
+    actionEditDraft = null;
+    renderAll();
+    showToast('Återställd till standardvärden.', 'success');
+  } catch(err){
+    showToast('Kunde inte återställa: ' + err.message, 'error');
+  }
 }
 
 function updateActionProgress(agg){
@@ -951,7 +1112,7 @@ function initDrawer(){
    ============================================================ */
 
 function renderRiskView(){
-  renderPriorityActions('riskActionsFull', 999);
+  renderPriorityActions('riskActionsFull', 999, true);
   const el = document.getElementById('riskPerSystem');
   const sorted = [...systems].sort((a,b) => b.riskScore - a.riskScore);
   if (!sorted.length){ el.innerHTML = emptyInline('Inga system registrerade ännu.'); return; }

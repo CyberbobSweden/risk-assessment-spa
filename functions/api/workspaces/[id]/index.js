@@ -40,6 +40,7 @@ export async function onRequestDelete({ env, params, request }) {
 
   await env.DB.prepare(`DELETE FROM systems WHERE workspace_id = ?`).bind(params.id).run();
   await env.DB.prepare(`DELETE FROM action_status WHERE workspace_id = ?`).bind(params.id).run();
+  await env.DB.prepare(`DELETE FROM action_overrides WHERE workspace_id = ?`).bind(params.id).run();
   await env.DB.prepare(`DELETE FROM workspace_members WHERE workspace_id = ?`).bind(params.id).run();
   await env.DB.prepare(`DELETE FROM workspaces WHERE id = ?`).bind(params.id).run();
   return json({ deleted: true });

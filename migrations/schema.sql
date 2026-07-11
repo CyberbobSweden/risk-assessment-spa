@@ -63,3 +63,18 @@ CREATE TABLE IF NOT EXISTS users (
   created_at     TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+-- Per-workspace overrides of the default effect/cost ratings shown for
+-- recommended actions, so a consultant can tune them per customer engagement
+-- instead of using the generic 1-5 defaults baked into the frontend.
+CREATE TABLE IF NOT EXISTS action_overrides (
+  workspace_id  TEXT NOT NULL,
+  action_id     TEXT NOT NULL,
+  effect        INTEGER,
+  cost          INTEGER,
+  note          TEXT DEFAULT '',
+  updated_by    TEXT DEFAULT '',
+  updated_at    TEXT NOT NULL,
+  PRIMARY KEY (workspace_id, action_id),
+  FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+);
