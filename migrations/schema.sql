@@ -51,3 +51,15 @@ CREATE TABLE IF NOT EXISTS workspace_members (
   FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_members_email ON workspace_members(email);
+
+-- User accounts (email + salted PBKDF2 password hash). Login issues a signed
+-- JWT (see functions/_jwt.js) instead of relying on a shared site password.
+CREATE TABLE IF NOT EXISTS users (
+  id             TEXT PRIMARY KEY,
+  email          TEXT NOT NULL UNIQUE,
+  password_hash  TEXT NOT NULL,
+  password_salt  TEXT NOT NULL,
+  iterations     INTEGER NOT NULL DEFAULT 100000,
+  created_at     TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);

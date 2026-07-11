@@ -13,13 +13,22 @@ export function errorJson(message, status = 400) {
   return json({ error: message }, status);
 }
 
+import { verifyJwt } from './_jwt.js';
+
 /**
- * Cloudflare Access injects this header once a request has passed an Access
- * policy check. Falls back to a placeholder for local `wrangler pages dev`
- * runs where Access isn't in front of the app.
+ * Resolves the caller's identity from a signed JWT (Authorization: Bearer ...).
+ * Returns { id, email } or null if there's no valid session.
+ * Falls back to a permissive dev identity when JWT_SECRET isn't configured
+ * (local `wrangler pages dev` without secrets set up).
  */
-export function getUserEmail(request) {
-  return request.headers.get('Cf-Access-Authenticated-User-Email') || 'okänd användare';
+export async function getAuthUser(request, env) {
+  if (!env.JWT_SECRET) return { id: 'dev', email: 'okänd användare' };
+  const authHeader = request.headers.get('Authorization') || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!token) return null;
+  const payload = await verifyJwt(token, env.JWT_SECRET);
+  if (!payload || !payload.email) return null;
+  return { id: payload.sub, email: payload.email };
 }
 
 export async function readJson(request) {

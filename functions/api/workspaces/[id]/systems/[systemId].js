@@ -1,9 +1,11 @@
-import { json, errorJson, getUserEmail, readJson, isMember } from '../../../../_utils.js';
+import { json, errorJson, getAuthUser, readJson, isMember } from '../../../../_utils.js';
 
 // PUT /api/workspaces/:id/systems/:systemId — update an existing system.
 export async function onRequestPut({ env, params, request }) {
-  const email = getUserEmail(request);
-  if (!(await isMember(env, params.id, email))) return errorJson('Du har inte åtkomst till det här arbetsrummet.', 403);
+  const user = await getAuthUser(request, env);
+  if (!user) return errorJson('Inloggning krävs.', 401);
+  if (!(await isMember(env, params.id, user.email))) return errorJson('Du har inte åtkomst till det här arbetsrummet.', 403);
+
   const sys = await readJson(request);
   if (!sys || !sys.name || !sys.type) return errorJson('Systemnamn och typ krävs.');
 
@@ -13,7 +15,7 @@ export async function onRequestPut({ env, params, request }) {
 
   const result = await env.DB.prepare(
     `UPDATE systems SET data=?, risk_score=?, risk_level=?, updated_by=?, updated_at=? WHERE id=? AND workspace_id=?`
-  ).bind(JSON.stringify(sys), sys.riskScore || 0, sys.riskLevel || 'Låg', email, now, params.systemId, params.id).run();
+  ).bind(JSON.stringify(sys), sys.riskScore || 0, sys.riskLevel || 'Låg', user.email, now, params.systemId, params.id).run();
 
   if (!result.meta || result.meta.changes === 0) return errorJson('Systemet hittades inte i det här arbetsrummet.', 404);
 
@@ -23,8 +25,10 @@ export async function onRequestPut({ env, params, request }) {
 
 // DELETE /api/workspaces/:id/systems/:systemId
 export async function onRequestDelete({ env, params, request }) {
-  const email = getUserEmail(request);
-  if (!(await isMember(env, params.id, email))) return errorJson('Du har inte åtkomst till det här arbetsrummet.', 403);
+  const user = await getAuthUser(request, env);
+  if (!user) return errorJson('Inloggning krävs.', 401);
+  if (!(await isMember(env, params.id, user.email))) return errorJson('Du har inte åtkomst till det här arbetsrummet.', 403);
+
   await env.DB.prepare(`DELETE FROM systems WHERE id=? AND workspace_id=?`).bind(params.systemId, params.id).run();
   await env.DB.prepare(`UPDATE workspaces SET updated_at=? WHERE id=?`).bind(new Date().toISOString(), params.id).run();
   return json({ deleted: true });

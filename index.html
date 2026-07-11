@@ -29,9 +29,38 @@
     <p class="welcome-footnote">🛡️ Byggt med Cloudflare Pages, D1 &amp; en nypa säkerhetsnörderi.</p>
   </div>
 
-  <!-- STEP 2: Workspace picker / create -->
+  <!-- STEP 2: Login / Register -->
+  <div class="welcome-card welcome-step" id="welcomeStepAuth" style="display:none;">
+    <button class="welcome-back" id="authBackBtn"><i class="fa-solid fa-arrow-left"></i> Tillbaka</button>
+
+    <div class="auth-tabs">
+      <button class="auth-tab active" type="button" data-auth-tab="login">Logga in</button>
+      <button class="auth-tab" type="button" data-auth-tab="register">Skapa konto</button>
+    </div>
+
+    <div class="auth-panel" id="authPanelLogin">
+      <div class="form-grid">
+        <div class="form-field span-2"><label>E-post</label><input type="email" id="login_email" autocomplete="username"></div>
+        <div class="form-field span-2"><label>Lösenord</label><input type="password" id="login_password" autocomplete="current-password"></div>
+      </div>
+      <button class="btn btn-primary" id="loginBtn" style="width:100%;justify-content:center;margin-top:16px;">Logga in</button>
+    </div>
+
+    <div class="auth-panel" id="authPanelRegister" style="display:none;">
+      <div class="form-grid">
+        <div class="form-field span-2"><label>E-post</label><input type="email" id="register_email" autocomplete="username"></div>
+        <div class="form-field span-2"><label>Lösenord (minst 8 tecken)</label><input type="password" id="register_password" autocomplete="new-password"></div>
+        <div class="form-field span-2"><label>Bekräfta lösenord</label><input type="password" id="register_password2" autocomplete="new-password"></div>
+      </div>
+      <button class="btn btn-primary" id="registerBtn" style="width:100%;justify-content:center;margin-top:16px;">Skapa konto</button>
+    </div>
+
+    <p class="auth-error" id="authError" style="display:none;"></p>
+  </div>
+
+  <!-- STEP 3: Workspace picker / create -->
   <div class="welcome-card welcome-step" id="welcomeStepWorkspace" style="display:none;">
-    <button class="welcome-back" id="welcomeBackBtn"><i class="fa-solid fa-arrow-left"></i> Tillbaka</button>
+    <button class="welcome-back" id="welcomeBackBtn"><i class="fa-solid fa-right-from-bracket"></i> Logga ut</button>
     <h4 class="section-subtitle" style="margin-top:6px;">Arbetsrum</h4>
 
     <div id="welcomeWorkspaceListWrap" style="display:none;">
@@ -344,6 +373,12 @@
           <h1>Inställningar</h1>
           <p class="view-subtitle">Projekt- och kunduppgifter samt datahantering</p>
         </div>
+      </div>
+
+      <div class="card settings-card">
+        <div class="card-header"><h3><i class="fa-solid fa-user-circle"></i> Konto</h3></div>
+        <p class="muted" style="margin-bottom:14px;">Inloggad som <strong id="accountEmailDisplay">—</strong></p>
+        <button class="btn btn-ghost" id="logoutBtn"><i class="fa-solid fa-right-from-bracket"></i> Logga ut</button>
       </div>
       <div class="card settings-card">
         <div class="card-header"><h3>Projektinformation</h3></div>

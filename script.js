@@ -1,8 +1,8 @@
 /* ==========================================================================
    Cyber Asset Inventory & Risk Assessment
-   Client-side application — no backend, no database, no login.
-   All data persisted in LocalStorage. Built modularly for future extension
-   (backend API, AI integration, additional frameworks).
+   Client-side application backed by Cloudflare Pages Functions + D1.
+   Login uses email/password (PBKDF2-hashed server-side) and a signed JWT
+   stored in localStorage — same pattern as share-your-music.
    ========================================================================== */
 
 'use strict';
@@ -12,7 +12,8 @@
    ============================================================ */
 
 const API_BASE = '/api';
-const LAST_WORKSPACE_KEY = 'caira_last_workspace_id'; // only remembers which workspace to open, not the data itself
+const LAST_WORKSPACE_KEY = 'caira_last_workspace_id'; // remembers which workspace to open, not the data itself
+const AUTH_TOKEN_KEY = 'caira_auth_token';
 
 const SYSTEM_TYPES = ['Affärssystem','OT','ICS','SCADA','Server','Databas','Webbapplikation','Mobilapp','SaaS','Azure','AWS','Google Cloud','Microsoft 365','Nätverksutrustning','Brandvägg','Annat'];
 const CLOUD_TYPES = ['SaaS','Azure','AWS','Google Cloud','Microsoft 365'];
@@ -83,6 +84,8 @@ let currentWizardStep = 1;
 let editingSystemId = null;
 let workspaces = [];        // all workspaces the caller can see
 let currentWorkspaceId = null;
+let authToken = null;
+let currentUserEmail = null;
 let currentFilters = { risk:'', vendor:'', regulation:'', owner:'', cloud:'', criticality:'' };
 let currentSort = { key:'riskScore', dir:'desc' };
 let searchTerm = '';
@@ -94,11 +97,20 @@ let currentReport = null;
    (= one customer engagement) so consultants and customers see shared data.
    ============================================================ */
 
+function loadAuthToken(){ authToken = localStorage.getItem(AUTH_TOKEN_KEY); }
+function saveAuthToken(token){ authToken = token; localStorage.setItem(AUTH_TOKEN_KEY, token); }
+function clearAuthToken(){ authToken = null; localStorage.removeItem(AUTH_TOKEN_KEY); }
+
 async function apiRequest(path, options){
-  const res = await fetch(API_BASE + path, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  });
+  const headers = { 'Content-Type': 'application/json', ...(options && options.headers) };
+  if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
+  const res = await fetch(API_BASE + path, { ...options, headers });
+  if (res.status === 401){
+    clearAuthToken();
+    currentUserEmail = null;
+    showAuthStep();
+    throw new Error('Sessionen har gått ut — logga in igen.');
+  }
   if (!res.ok){
     let msg = `Fel (${res.status})`;
     try{ const body = await res.json(); if (body.error) msg = body.error; } catch(e){}
@@ -1389,6 +1401,14 @@ async function createWorkspaceAndOpen(name, customer, consultant){
 
 function showWelcomeScreen(){
   document.getElementById('welcomeStepHero').style.display = 'block';
+  document.getElementById('welcomeStepAuth').style.display = 'none';
+  document.getElementById('welcomeStepWorkspace').style.display = 'none';
+  document.getElementById('welcomeScreen').classList.add('active');
+}
+function showAuthStep(){
+  hideAuthError();
+  document.getElementById('welcomeStepHero').style.display = 'none';
+  document.getElementById('welcomeStepAuth').style.display = 'block';
   document.getElementById('welcomeStepWorkspace').style.display = 'none';
   document.getElementById('welcomeScreen').classList.add('active');
 }
@@ -1396,10 +1416,90 @@ function showWelcomeWorkspaceStep(){
   document.getElementById('welcomeWorkspaceListWrap').style.display = workspaces.length ? 'block' : 'none';
   renderWorkspaceListInto('welcomeWorkspaceList');
   document.getElementById('welcomeStepHero').style.display = 'none';
+  document.getElementById('welcomeStepAuth').style.display = 'none';
   document.getElementById('welcomeStepWorkspace').style.display = 'block';
+  document.getElementById('welcomeScreen').classList.add('active');
 }
 function hideWelcomeScreen(){
   document.getElementById('welcomeScreen').classList.remove('active');
+}
+
+function showAuthError(msg){
+  const el = document.getElementById('authError');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+function hideAuthError(){
+  document.getElementById('authError').style.display = 'none';
+}
+
+/** After a successful login/register: load workspaces and jump straight to
+ *  the right place (last-used workspace, the only workspace, or the picker). */
+async function afterAuthSuccess(){
+  const emailEl = document.getElementById('accountEmailDisplay');
+  if (emailEl) emailEl.textContent = currentUserEmail || '—';
+  try{
+    await loadWorkspaces();
+  } catch(err){
+    showToast('Kunde inte hämta arbetsrum: ' + err.message, 'error');
+    return;
+  }
+  const lastId = localStorage.getItem(LAST_WORKSPACE_KEY);
+  const lastStillExists = lastId && workspaces.some(w => w.id === lastId);
+  if (lastStillExists) await selectWorkspace(lastId);
+  else if (workspaces.length === 1) await selectWorkspace(workspaces[0].id);
+  else showWelcomeWorkspaceStep();
+}
+
+async function doLogin(){
+  const email = document.getElementById('login_email').value.trim();
+  const password = document.getElementById('login_password').value;
+  hideAuthError();
+  if (!email || !password){ showAuthError('Ange e-post och lösenord.'); return; }
+  const btn = document.getElementById('loginBtn');
+  btn.disabled = true;
+  try{
+    const res = await apiPost('/auth/login', { email, password });
+    saveAuthToken(res.token);
+    currentUserEmail = res.email;
+    await afterAuthSuccess();
+  } catch(err){
+    showAuthError(err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function doRegister(){
+  const email = document.getElementById('register_email').value.trim();
+  const p1 = document.getElementById('register_password').value;
+  const p2 = document.getElementById('register_password2').value;
+  hideAuthError();
+  if (!email || !p1){ showAuthError('Ange e-post och lösenord.'); return; }
+  if (p1.length < 8){ showAuthError('Lösenordet måste vara minst 8 tecken.'); return; }
+  if (p1 !== p2){ showAuthError('Lösenorden matchar inte.'); return; }
+  const btn = document.getElementById('registerBtn');
+  btn.disabled = true;
+  try{
+    const res = await apiPost('/auth/register', { email, password: p1 });
+    saveAuthToken(res.token);
+    currentUserEmail = res.email;
+    await afterAuthSuccess();
+  } catch(err){
+    showAuthError(err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function logout(){
+  clearAuthToken();
+  currentUserEmail = null;
+  currentWorkspaceId = null;
+  localStorage.removeItem(LAST_WORKSPACE_KEY);
+  hideWelcomeScreen();
+  showWelcomeScreen();
+  showToast('Utloggad.', 'success');
 }
 
 async function selectWorkspace(id){
@@ -1437,17 +1537,37 @@ function initWorkspaceSwitcher(){
     });
   });
 
-  document.getElementById('welcomeGetStartedBtn').addEventListener('click', showWelcomeWorkspaceStep);
-  document.getElementById('welcomeBackBtn').addEventListener('click', () => {
-    document.getElementById('welcomeStepWorkspace').style.display = 'none';
-    document.getElementById('welcomeStepHero').style.display = 'block';
+  // Hero step -> auth step
+  document.getElementById('welcomeGetStartedBtn').addEventListener('click', showAuthStep);
+  document.getElementById('authBackBtn').addEventListener('click', showWelcomeScreen);
+
+  // Auth tabs
+  document.querySelectorAll('.auth-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      const isLogin = tab.dataset.authTab === 'login';
+      document.getElementById('authPanelLogin').style.display = isLogin ? 'block' : 'none';
+      document.getElementById('authPanelRegister').style.display = isLogin ? 'none' : 'block';
+      hideAuthError();
+    });
   });
+  document.getElementById('loginBtn').addEventListener('click', doLogin);
+  document.getElementById('registerBtn').addEventListener('click', doRegister);
+  document.getElementById('login_password').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+  document.getElementById('register_password2').addEventListener('keydown', e => { if (e.key === 'Enter') doRegister(); });
+
+  // Workspace step -> logout (going "back" here means signing out, not browsing anonymously)
+  document.getElementById('welcomeBackBtn').addEventListener('click', logout);
+
   document.getElementById('welcomeCreateWorkspaceBtn').addEventListener('click', () => {
     const name = document.getElementById('welcome_ws_name').value;
     const customer = document.getElementById('welcome_ws_customer').value;
     const consultant = document.getElementById('welcome_ws_consultant').value;
     createWorkspaceAndOpen(name, customer, consultant);
   });
+
+  document.getElementById('logoutBtn').addEventListener('click', logout);
 }
 
 /* ============================================================
@@ -1465,25 +1585,22 @@ async function initApp(){
   initGlobalDelegation();
   initWorkspaceSwitcher();
 
-  try{
-    await loadWorkspaces();
-  } catch(err){
-    showToast('Kunde inte nå API:et. Kör du detta via `wrangler pages dev`?', 'error');
-    return;
+  loadAuthToken();
+
+  if (authToken){
+    try{
+      const me = await apiGet('/auth/me');
+      currentUserEmail = me.email;
+      document.getElementById('accountEmailDisplay').textContent = currentUserEmail;
+      await afterAuthSuccess();
+      return;
+    } catch(err){
+      // token invalid/expired — fall through to the hero/login flow
+      clearAuthToken();
+    }
   }
 
-  const lastId = localStorage.getItem(LAST_WORKSPACE_KEY);
-  const lastStillExists = lastId && workspaces.some(w => w.id === lastId);
-
-  if (lastStillExists){
-    await selectWorkspace(lastId);
-  } else if (workspaces.length === 1){
-    await selectWorkspace(workspaces[0].id);
-  } else {
-    // No remembered workspace (or it was deleted) — greet the user with the
-    // full-screen onboarding gate instead of dropping them into an empty dashboard.
-    showWelcomeScreen();
-  }
+  showWelcomeScreen();
 }
 
 document.addEventListener('DOMContentLoaded', initApp);

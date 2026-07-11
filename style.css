@@ -456,6 +456,16 @@ tbody tr:last-child td{ border-bottom:none; }
   color:var(--c-text-muted); font-size:12.5px; font-weight:600; cursor:pointer; margin-bottom:6px;
 }
 .welcome-back:hover{ color:var(--c-secondary); }
+.auth-tabs{ display:flex; gap:6px; background:var(--c-bg); border-radius:var(--radius-sm); padding:4px; margin-bottom:20px; }
+.auth-tab{
+  flex:1; padding:9px; border:none; background:transparent; border-radius:7px;
+  font-size:13px; font-weight:600; color:var(--c-text-muted); cursor:pointer; transition:all .15s var(--ease);
+}
+.auth-tab.active{ background:#fff; color:var(--c-secondary); box-shadow:var(--shadow-sm); }
+.auth-error{
+  margin-top:14px; padding:10px 12px; border-radius:var(--radius-sm); background:rgba(220,38,38,0.08);
+  color:var(--c-danger); font-size:12.5px; font-weight:600;
+}
 #welcomeWorkspaceList .list-row{ cursor:pointer; }
 #welcomeWorkspaceList .list-row:hover{ border-color:var(--c-secondary); }
 
