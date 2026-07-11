@@ -1,18 +1,26 @@
 import { json, errorJson, getUserEmail, readJson } from '../../_utils.js';
 
-// GET /api/workspaces — list all workspaces the caller can see.
-// Cloudflare Access gates who can reach the app at all; if you need stricter
-// per-customer isolation later, filter this query by a membership table keyed
-// on getUserEmail(request).
-export async function onRequestGet({ env }) {
-  const { results } = await env.DB.prepare(
-    `SELECT id, name, customer, project, consultancy, consultant, created_at, updated_at
-     FROM workspaces ORDER BY updated_at DESC`
-  ).all();
+// GET /api/workspaces — only workspaces the caller is a member of.
+// Falls back to showing everything when there's no Access header (local dev).
+export async function onRequestGet({ env, request }) {
+  const email = getUserEmail(request);
+  const stmt = (!email || email === 'okänd användare')
+    ? env.DB.prepare(
+        `SELECT id, name, customer, project, consultancy, consultant, created_at, updated_at
+         FROM workspaces ORDER BY updated_at DESC`
+      )
+    : env.DB.prepare(
+        `SELECT w.id, w.name, w.customer, w.project, w.consultancy, w.consultant, w.created_at, w.updated_at
+         FROM workspaces w
+         JOIN workspace_members m ON m.workspace_id = w.id
+         WHERE lower(m.email) = lower(?)
+         ORDER BY w.updated_at DESC`
+      ).bind(email);
+  const { results } = await stmt.all();
   return json(results);
 }
 
-// POST /api/workspaces — create a new workspace (one per customer engagement).
+// POST /api/workspaces — create a new workspace; the creator becomes its first member.
 export async function onRequestPost({ env, request }) {
   const body = await readJson(request);
   if (!body || !body.name || !body.name.trim()) return errorJson('Namn krävs för arbetsrummet.');
@@ -28,6 +36,12 @@ export async function onRequestPost({ env, request }) {
     id, body.name.trim(), body.customer || '', body.project || '',
     body.consultancy || '', body.consultant || '', email, now, now
   ).run();
+
+  if (email && email !== 'okänd användare'){
+    await env.DB.prepare(
+      `INSERT OR IGNORE INTO workspace_members (workspace_id, email, added_at) VALUES (?,?,?)`
+    ).bind(id, email, now).run();
+  }
 
   return json({
     id, name: body.name.trim(), customer: body.customer || '', project: body.project || '',

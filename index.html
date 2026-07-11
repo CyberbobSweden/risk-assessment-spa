@@ -369,8 +369,18 @@
       </div>
 
       <div class="card settings-card">
+        <div class="card-header"><h3><i class="fa-solid fa-user-group"></i> Dela arbetsrum</h3></div>
+        <p class="muted" style="margin-bottom:14px;">Bara e-postadresser i listan nedan kan öppna det här arbetsrummet. Du (som skapade det) lades till automatiskt.</p>
+        <div class="list-body" id="membersList" style="margin-bottom:16px;"></div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <input type="email" id="newMemberEmail" placeholder="namn@exempel.se" style="flex:1; min-width:220px; padding:9px 11px; border:1px solid var(--c-border); border-radius:var(--radius-sm);">
+          <button class="btn btn-primary" id="addMemberBtn"><i class="fa-solid fa-user-plus"></i> Lägg till</button>
+        </div>
+      </div>
+
+      <div class="card settings-card">
         <div class="card-header"><h3>Datahantering</h3></div>
-        <p class="muted">All data lagras lokalt i webbläsaren (LocalStorage). Ingen data skickas till någon server.</p>
+        <p class="muted">All data för det här arbetsrummet lagras i en delad databas (Cloudflare D1), inte i webbläsaren. Alla med åtkomst (se "Dela arbetsrum" ovan) ser samma data i realtid.</p>
         <div class="settings-actions">
           <button class="btn btn-secondary" id="exportAllJsonBtn"><i class="fa-solid fa-download"></i> Exportera all data (JSON)</button>
           <button class="btn btn-secondary" id="importJsonBtn"><i class="fa-solid fa-upload"></i> Importera data (JSON)</button>

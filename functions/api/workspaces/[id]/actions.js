@@ -1,7 +1,9 @@
-import { json, errorJson, getUserEmail, readJson } from '../../../_utils.js';
+import { json, errorJson, getUserEmail, readJson, isMember } from '../../../_utils.js';
 
 // GET /api/workspaces/:id/actions — map of actionId -> completed(bool)
-export async function onRequestGet({ env, params }) {
+export async function onRequestGet({ env, params, request }) {
+  const email = getUserEmail(request);
+  if (!(await isMember(env, params.id, email))) return errorJson('Du har inte åtkomst till det här arbetsrummet.', 403);
   const { results } = await env.DB.prepare(
     `SELECT action_id, completed FROM action_status WHERE workspace_id = ?`
   ).bind(params.id).all();
@@ -12,11 +14,12 @@ export async function onRequestGet({ env, params }) {
 
 // POST /api/workspaces/:id/actions — body: { actionId, completed }
 export async function onRequestPost({ env, params, request }) {
+  const email = getUserEmail(request);
+  if (!(await isMember(env, params.id, email))) return errorJson('Du har inte åtkomst till det här arbetsrummet.', 403);
   const body = await readJson(request);
   if (!body || !body.actionId) return errorJson('actionId krävs.');
 
   const now = new Date().toISOString();
-  const email = getUserEmail(request);
   const completed = body.completed ? 1 : 0;
 
   await env.DB.prepare(

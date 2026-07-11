@@ -246,6 +246,7 @@ function switchView(view){
   document.querySelectorAll('.nav-item').forEach(i => i.classList.toggle('active', i.dataset.view === view));
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === `view-${view}`));
   renderAll();
+  if (view === 'settings') renderMembers();
   if (window.innerWidth <= 900) document.getElementById('sidebar').classList.remove('mobile-open');
 }
 
@@ -1159,6 +1160,9 @@ function initSettings(){
     }
   });
 
+  document.getElementById('addMemberBtn').addEventListener('click', addMember);
+  document.getElementById('newMemberEmail').addEventListener('keydown', e => { if (e.key === 'Enter') addMember(); });
+
   document.getElementById('exportAllJsonBtn').addEventListener('click', () => exportJSON('CAIRA_full_export'));
 
   document.getElementById('importJsonBtn').addEventListener('click', () => document.getElementById('importJsonInput').click());
@@ -1201,6 +1205,54 @@ function initSettings(){
       showToast('Kunde inte radera: ' + err.message, 'error');
     }
   });
+}
+
+async function renderMembers(){
+  const el = document.getElementById('membersList');
+  if (!currentWorkspaceId) return;
+  el.innerHTML = emptyInline('Läser in …');
+  try{
+    const members = await apiGet(`/workspaces/${currentWorkspaceId}/members`);
+    if (!members.length){ el.innerHTML = emptyInline('Inga medlemmar listade ännu.'); return; }
+    el.innerHTML = members.map(m => `
+      <div class="list-row">
+        <div class="list-main">
+          <div class="list-title"><i class="fa-solid fa-user" style="color:var(--c-text-muted); margin-right:8px;"></i>${esc(m.email)}</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" data-remove-member="${esc(m.email)}"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+    `).join('');
+    el.querySelectorAll('[data-remove-member]').forEach(btn => {
+      btn.addEventListener('click', () => removeMember(btn.dataset.removeMember));
+    });
+  } catch(err){
+    el.innerHTML = emptyInline('Kunde inte läsa in medlemmar: ' + err.message);
+  }
+}
+
+async function addMember(){
+  const input = document.getElementById('newMemberEmail');
+  const email = input.value.trim();
+  if (!email || !email.includes('@')){ showToast('Ange en giltig e-postadress.', 'error'); return; }
+  try{
+    await apiPost(`/workspaces/${currentWorkspaceId}/members`, { email });
+    input.value = '';
+    renderMembers();
+    showToast('Medlem tillagd. Kom ihåg att också ge åtkomst i Cloudflare Access.', 'success');
+  } catch(err){
+    showToast('Kunde inte lägga till: ' + err.message, 'error');
+  }
+}
+
+async function removeMember(email){
+  if (!confirm(`Ta bort ${email} från arbetsrummet?`)) return;
+  try{
+    await apiRequest(`/workspaces/${currentWorkspaceId}/members`, { method:'DELETE', body: JSON.stringify({ email }) });
+    renderMembers();
+    showToast('Medlem borttagen.', 'success');
+  } catch(err){
+    showToast('Kunde inte ta bort: ' + err.message, 'error');
+  }
 }
 
 function updateCustomerChip(){

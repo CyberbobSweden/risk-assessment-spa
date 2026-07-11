@@ -40,3 +40,14 @@ CREATE TABLE IF NOT EXISTS action_status (
   PRIMARY KEY (workspace_id, action_id),
   FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
 );
+
+-- Per-workspace access isolation: only listed emails can see/open a workspace.
+-- The creator is added automatically when a workspace is created.
+CREATE TABLE IF NOT EXISTS workspace_members (
+  workspace_id  TEXT NOT NULL,
+  email         TEXT NOT NULL,
+  added_at      TEXT NOT NULL,
+  PRIMARY KEY (workspace_id, email),
+  FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_members_email ON workspace_members(email);

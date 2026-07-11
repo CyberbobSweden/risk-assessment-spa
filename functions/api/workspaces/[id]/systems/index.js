@@ -1,9 +1,9 @@
-import { json, errorJson, getUserEmail, readJson } from '../../../../_utils.js';
+import { json, errorJson, getUserEmail, readJson, isMember } from '../../../../_utils.js';
 
 // GET /api/workspaces/:id/systems — list every system in this workspace.
-// Risk score/level are computed client-side (same engine used for the form
-// preview) and sent in on save, so we just store and return the JSON blob.
-export async function onRequestGet({ env, params }) {
+export async function onRequestGet({ env, params, request }) {
+  const email = getUserEmail(request);
+  if (!(await isMember(env, params.id, email))) return errorJson('Du har inte åtkomst till det här arbetsrummet.', 403);
   const { results } = await env.DB.prepare(
     `SELECT data FROM systems WHERE workspace_id = ? ORDER BY updated_at DESC`
   ).bind(params.id).all();
@@ -12,12 +12,13 @@ export async function onRequestGet({ env, params }) {
 
 // POST /api/workspaces/:id/systems — create a new system record.
 export async function onRequestPost({ env, params, request }) {
+  const email = getUserEmail(request);
+  if (!(await isMember(env, params.id, email))) return errorJson('Du har inte åtkomst till det här arbetsrummet.', 403);
   const sys = await readJson(request);
   if (!sys || !sys.name || !sys.type) return errorJson('Systemnamn och typ krävs.');
 
   const id = sys.id && sys.id.startsWith('sys_') ? sys.id : 'sys_' + crypto.randomUUID();
   const now = new Date().toISOString();
-  const email = getUserEmail(request);
   sys.id = id;
   sys.createdAt = sys.createdAt || now;
   sys.updatedAt = now;
@@ -33,7 +34,9 @@ export async function onRequestPost({ env, params, request }) {
 
 // DELETE /api/workspaces/:id/systems — clear every system in the workspace
 // (used by "Radera all data" in Inställningar; the workspace itself remains).
-export async function onRequestDelete({ env, params }) {
+export async function onRequestDelete({ env, params, request }) {
+  const email = getUserEmail(request);
+  if (!(await isMember(env, params.id, email))) return errorJson('Du har inte åtkomst till det här arbetsrummet.', 403);
   await env.DB.prepare(`DELETE FROM systems WHERE workspace_id = ?`).bind(params.id).run();
   await env.DB.prepare(`DELETE FROM action_status WHERE workspace_id = ?`).bind(params.id).run();
   await touchWorkspace(env, params.id);

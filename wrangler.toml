@@ -8,4 +8,4 @@ pages_build_output_dir = "."
 [[d1_databases]]
 binding = "DB"
 database_name = "risk_assessment_db"
-database_id = "93385b3f-0a02-4405-8e39-2ac51ec1d17b"
+database_id = "REPLACE_WITH_YOUR_DATABASE_ID"

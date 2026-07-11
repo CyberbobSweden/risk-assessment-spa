@@ -1,12 +1,13 @@
-import { json, errorJson, getUserEmail, readJson } from '../../../../_utils.js';
+import { json, errorJson, getUserEmail, readJson, isMember } from '../../../../_utils.js';
 
 // PUT /api/workspaces/:id/systems/:systemId — update an existing system.
 export async function onRequestPut({ env, params, request }) {
+  const email = getUserEmail(request);
+  if (!(await isMember(env, params.id, email))) return errorJson('Du har inte åtkomst till det här arbetsrummet.', 403);
   const sys = await readJson(request);
   if (!sys || !sys.name || !sys.type) return errorJson('Systemnamn och typ krävs.');
 
   const now = new Date().toISOString();
-  const email = getUserEmail(request);
   sys.id = params.systemId;
   sys.updatedAt = now;
 
@@ -21,7 +22,9 @@ export async function onRequestPut({ env, params, request }) {
 }
 
 // DELETE /api/workspaces/:id/systems/:systemId
-export async function onRequestDelete({ env, params }) {
+export async function onRequestDelete({ env, params, request }) {
+  const email = getUserEmail(request);
+  if (!(await isMember(env, params.id, email))) return errorJson('Du har inte åtkomst till det här arbetsrummet.', 403);
   await env.DB.prepare(`DELETE FROM systems WHERE id=? AND workspace_id=?`).bind(params.systemId, params.id).run();
   await env.DB.prepare(`UPDATE workspaces SET updated_at=? WHERE id=?`).bind(new Date().toISOString(), params.id).run();
   return json({ deleted: true });

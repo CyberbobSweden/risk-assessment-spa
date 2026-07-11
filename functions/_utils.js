@@ -29,3 +29,17 @@ export async function readJson(request) {
     return null;
   }
 }
+
+/**
+ * Checks whether an email is a member of a workspace. When Cloudflare Access
+ * isn't in front of the app (e.g. local `wrangler pages dev`), getUserEmail()
+ * returns the placeholder below — we allow that case through so local dev
+ * keeps working without an Access setup.
+ */
+export async function isMember(env, workspaceId, email) {
+  if (!email || email === 'okänd användare') return true;
+  const row = await env.DB.prepare(
+    `SELECT 1 FROM workspace_members WHERE workspace_id = ? AND lower(email) = lower(?)`
+  ).bind(workspaceId, email).first();
+  return !!row;
+}

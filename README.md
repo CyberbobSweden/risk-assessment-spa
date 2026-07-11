@@ -60,22 +60,49 @@ wrangler pages deploy . --project-name=risk-assessment-spa
 
 (D1-bindningen i `wrangler.toml` följer med automatiskt vid CLI-deploy.)
 
-### 4. Sätt upp Cloudflare Access (inloggning/delning)
+### 4. Kör medlemskaps-migreringen (om databasen redan finns sen tidigare)
 
-För att bara rätt konsulter och kunder ska kunna nå appen:
+Om du redan körde `schema.sql` innan denna uppdatering saknas tabellen
+`workspace_members`. Kör då:
+
+```cmd
+wrangler d1 execute risk_assessment_db --remote --file=./migrations/0002_members.sql
+```
+
+(Nya installationer får tabellen automatiskt via `schema.sql` och kan hoppa över detta steg.)
+
+### 5. Sätt upp Cloudflare Access (vem kommer in på sajten alls)
 
 1. **Zero Trust-dashboarden → Access → Applications → Add an application → Self-hosted**
 2. Domän: din Pages-URL (t.ex. `risk-assessment-spa.pages.dev` eller egen domän)
 3. Policy: lägg till regler, t.ex.
    - **Allow**: er egen e-postdomän (t.ex. `@dittbolag.se`)
-   - **Allow**: specifika kund-e-postadresser (en policy per kundengagemang, eller en gemensam lista)
-4. Spara — nu krävs inloggning (Google/Microsoft/e-post-OTP m.m., valfritt i Access-policyn) för att nå appen överhuvudtaget
+   - **Allow**: specifika kund-e-postadresser
+4. Spara — nu krävs inloggning för att nå appen överhuvudtaget
 
-**Notera:** Access styr *vem som kommer in på sajten*. Alla som släpps in ser
-listan över arbetsrum och kan välja/skapa ett. Om ni vill att en specifik
-kund bara ska se sitt eget arbetsrum (inte andras) är nästa steg att lägga
-till en `members`-tabell i D1 och filtrera `/api/workspaces` på
-`Cf-Access-Authenticated-User-Email` — hör av dig om ni vill ha det inbyggt.
+### 6. Arbetsrums-medlemskap (vem ser vilket arbetsrum)
+
+Access styr *vem som kommer in på sajten*. Vem som ser *vilket specifikt
+arbetsrum* styrs separat, av en `workspace_members`-tabell i D1:
+
+- Den som skapar ett arbetsrum läggs till som medlem automatiskt.
+- Lägg till fler medlemmar (kollegor, kundens kontaktperson) under
+  **Inställningar → Dela arbetsrum** i appen — bara deras e-postadress krävs,
+  och den måste matcha exakt den e-post de loggar in med via Access.
+- Den som inte är medlem i ett arbetsrum ser det inte alls i listan, även om
+  de kommer in på sajten.
+
+**Om du redan skapat testarbetsrum innan Access var på plats** (utan inloggning
+räknas alla anrop som samma "okänd användare" och har ingen riktig
+medlemskapsrad) — ge dig själv åtkomst till dem i efterhand med din riktiga
+e-postadress:
+
+```cmd
+wrangler d1 execute risk_assessment_db --remote --command="INSERT INTO workspace_members (workspace_id, email, added_at) SELECT id, 'din-epost@dittbolag.se', datetime('now') FROM workspaces;"
+```
+
+Eller enklare: radera testarbetsrummen och skapa nya efter att Access är
+aktiverat — då blir du automatiskt medlem.
 
 ## Lokal utveckling
 
